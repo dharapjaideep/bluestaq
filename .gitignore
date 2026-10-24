@@ -34,3 +34,6 @@ build/
 
 ### Claude scratch output ###
 /tmp/
+
+### Local H2 database files ###
+/data/

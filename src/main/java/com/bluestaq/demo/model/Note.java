@@ -10,6 +10,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -49,6 +50,15 @@ public class Note {
 
     @Column(nullable = false)
     private Instant updatedAt;
+
+    /**
+     * Optimistic-locking counter: Hibernate increments it on every update and refuses a write
+     * whose version no longer matches the row (a concurrent save in the same moment). Stale
+     * edits from earlier requests are caught in NoteService by comparing the client's version.
+     */
+    @Version
+    @Column(nullable = false)
+    private Long version;
 
     /**
      * Creates a new, unsaved note.

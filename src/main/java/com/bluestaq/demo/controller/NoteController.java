@@ -2,6 +2,7 @@ package com.bluestaq.demo.controller;
 
 import com.bluestaq.demo.dto.NoteRequest;
 import com.bluestaq.demo.dto.NoteResponse;
+import com.bluestaq.demo.dto.NoteUpdateRequest;
 import com.bluestaq.demo.service.NoteService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -77,12 +78,12 @@ public class NoteController {
      *
      * @param principal the authenticated caller
      * @param id        the note's id
-     * @param request   the new fields, validated
-     * @return the updated note
+     * @param request   the new fields and the version they are based on, validated
+     * @return the updated note, with its new version
      */
     @PutMapping("/{id}")
     public NoteResponse update(@AuthenticationPrincipal UserDetails principal, @PathVariable Long id,
-                               @Valid @RequestBody NoteRequest request) {
+                               @Valid @RequestBody NoteUpdateRequest request) {
         return noteService.update(principal.getUsername(), id, request);
     }
 

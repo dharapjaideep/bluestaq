@@ -3,8 +3,9 @@
 # Start the app first (./mvnw spring-boot:run). The demo data seeder creates:
 #   alice@demo.com, bob@demo.com, carol@demo.com  (password: password123)
 #   team "Engineering" with alice and bob as members (carol is not in it)
-# Run the requests top to bottom: later ones reuse ids captured by earlier ones.
-# The data is in-memory, so restart the app to reset it.
+# Run the requests top to bottom: later ones reuse ids (and note versions) captured by earlier ones.
+# PUT /notes/{id} must send the note's current "version" (optimistic locking); a stale one -> 409.
+# The database persists in data/; stop the app and delete data/ to reset to the demo state.
 
 @host = http://localhost:8080
 @password = password123
@@ -68,7 +69,10 @@ Content-Type: application/json
   "teamId": {{teamId}}
 }
 
-> {% client.global.set("sharedNoteId", response.body.id); %}
+> {%
+    client.global.set("sharedNoteId", response.body.id);
+    client.global.set("sharedVersion", response.body.version);
+%}
 
 ### Alice creates a personal note -> 201 (no teamId = personal)
 POST {{host}}/notes
@@ -80,7 +84,10 @@ Content-Type: application/json
   "content": "Only alice can see this."
 }
 
-> {% client.global.set("privateNoteId", response.body.id); %}
+> {%
+    client.global.set("privateNoteId", response.body.id);
+    client.global.set("privateVersion", response.body.version);
+%}
 
 ### Carol tries to create a note in Engineering -> 400 (fieldErrors.teamId): she is not a member
 POST {{host}}/notes
@@ -107,7 +114,8 @@ Content-Type: application/json
 GET {{host}}/notes/{{sharedNoteId}}
 Authorization: Basic bob@demo.com {{password}}
 
-### Bob edits the shared note -> 200 (PUT replaces the note, so he sends the teamId back)
+### Bob edits the shared note -> 200 (PUT replaces the note, so he sends the teamId back,
+### plus the version he read); the response carries the new version
 PUT {{host}}/notes/{{sharedNoteId}}
 Authorization: Basic bob@demo.com {{password}}
 Content-Type: application/json
@@ -115,6 +123,32 @@ Content-Type: application/json
 {
   "title": "Release checklist",
   "content": "Tag the build; update the changelog; notify QA. (edited by bob)",
+  "teamId": {{teamId}},
+  "version": {{sharedVersion}}
+}
+
+> {% if (response.status === 200) client.global.set("sharedVersion", response.body.version); %}
+
+### Alice saves an edit based on the version she read before bob's change -> 409 Conflict
+### ("This note was changed by someone else...") and the note is unchanged
+PUT {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Release checklist",
+  "content": "Alice's edit made on a stale copy",
+  "teamId": {{teamId}},
+  "version": 0
+}
+
+### PUT without a version -> 400 (fieldErrors.version)
+PUT {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Release checklist",
   "teamId": {{teamId}}
 }
 
@@ -125,7 +159,8 @@ Content-Type: application/json
 
 {
   "title": "Release checklist",
-  "content": "Mine now"
+  "content": "Mine now",
+  "version": {{sharedVersion}}
 }
 
 ### Bob tries to delete the shared note -> 403: only the owner can delete
@@ -152,7 +187,8 @@ Content-Type: application/json
 {
   "title": "Alice's draft (now shared)",
   "content": "Shared with Engineering.",
-  "teamId": {{teamId}}
+  "teamId": {{teamId}},
+  "version": {{privateVersion}}
 }
 
 ### Bob reads the newly shared note -> 200

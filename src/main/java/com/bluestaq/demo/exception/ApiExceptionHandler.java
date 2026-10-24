@@ -6,6 +6,7 @@ import java.util.TreeMap;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -87,6 +88,29 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidTeamException.class)
     public ResponseEntity<ApiError> handleInvalidTeam(InvalidTeamException e) {
         return error(HttpStatus.BAD_REQUEST, "Validation failed", Map.of("teamId", e.getMessage()));
+    }
+
+    /**
+     * A note update based on an out-of-date version.
+     *
+     * @param e the version-conflict exception
+     * @return 409 Conflict asking the client to reload
+     */
+    @ExceptionHandler(NoteVersionConflictException.class)
+    public ResponseEntity<ApiError> handleVersionConflict(NoteVersionConflictException e) {
+        return error(HttpStatus.CONFLICT, e.getMessage(), Map.of());
+    }
+
+    /**
+     * Two saves of the same entity racing: the later flush finds the row's version already
+     * moved on. Only notes are versioned, so the note message applies.
+     *
+     * @param e the optimistic-locking exception
+     * @return 409 Conflict asking the client to reload
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiError> handleOptimisticLock(ObjectOptimisticLockingFailureException e) {
+        return error(HttpStatus.CONFLICT, NoteVersionConflictException.MESSAGE, Map.of());
     }
 
     /**

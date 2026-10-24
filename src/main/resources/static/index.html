@@ -195,6 +195,9 @@
       <div id="editor" hidden>
         <h2 id="editor-heading">New note</h2>
         <div id="editor-msg" class="msg" hidden></div>
+        <div id="conflict-actions" class="actions" style="margin:-4px 0 12px" hidden>
+          <button id="reload-note" class="secondary small" type="button">Reload note</button>
+        </div>
         <form id="editor-form" novalidate>
           <label for="note-title">Title</label>
           <input id="note-title" maxlength="255" required>
@@ -244,6 +247,7 @@
     filter: 'all',     // 'all' | 'personal' | team id (number)
     query: '',
     selectedId: null,  // note open in the editor; null for a new note
+    selectedVersion: null, // version of the open note as last read; sent back on save
   };
 
   const $ = (id) => document.getElementById(id);
@@ -423,6 +427,13 @@
   function signOut(message, kind = 'error') {
     state.auth = null;
     try { sessionStorage.removeItem(AUTH_KEY); } catch { /* storage unavailable */ }
+    // Security: wipe the previous user's data from the (hidden) app, so the next person to sign
+    // in on this tab never sees it while their own data loads.
+    Object.assign(state, { teams: [], notes: [], selectedId: null, selectedVersion: null });
+    for (const id of ['note-list', 'filters', 'team-cards']) $(id).replaceChildren();
+    for (const id of ['note-title', 'note-content', 'search']) $(id).value = '';
+    $('who').textContent = '';
+    showRightPanel('placeholder');
     setMsg('login-msg', message, kind);
     showAuth('login');
   }
@@ -554,6 +565,7 @@
 
   function clearEditorErrors() {
     setMsg('editor-msg', '');
+    $('conflict-actions').hidden = true;
     for (const f of ['title', 'team', 'content']) $(`note-${f}-error`).textContent = '';
   }
 
@@ -577,6 +589,7 @@
 
   function newNote() {
     state.selectedId = null;
+    state.selectedVersion = null;
     renderNotes();
     clearEditorErrors();
     resetDeleteButton();
@@ -610,6 +623,7 @@
 
   function showNoteInEditor(note) {
     const isOwner = note.ownerId === state.auth.me.id;
+    state.selectedVersion = note.version;
     $('editor-heading').textContent = 'Edit note';
     $('note-title').value = note.title;
     $('note-content').value = note.content || '';
@@ -624,6 +638,7 @@
   }
 
   $('new-note').addEventListener('click', newNote);
+  $('reload-note').addEventListener('click', () => openNote(state.selectedId));
   $('cancel-edit').addEventListener('click', () => {
     state.selectedId = null;
     renderNotes();
@@ -645,15 +660,24 @@
     await busy(e.target, async () => {
       try {
         const isNew = state.selectedId === null;
+        // Updates carry the version this edit is based on; if someone saved in between, the
+        // server answers 409 instead of overwriting their changes.
         const note = isNew
           ? await api('POST', '/notes', body)
-          : await api('PUT', `/notes/${state.selectedId}`, body);
+          : await api('PUT', `/notes/${state.selectedId}`, { ...body, version: state.selectedVersion });
         state.selectedId = note.id;
         await loadNotes();
         showNoteInEditor(note);
         setMsg('editor-msg', isNew ? 'Note created.' : 'Saved.', 'ok');
       } catch (err) {
         if (err.status === 401) return;
+        if (err.status === 409) {
+          // Keep the user's unsaved text in the editor so they can copy it; only the
+          // "Reload note" button replaces it with the latest saved version.
+          setMsg('editor-msg', `${err.message} Your unsaved changes are still below; copy them before reloading.`);
+          $('conflict-actions').hidden = false;
+          return;
+        }
         for (const [field, text] of Object.entries(err.fieldErrors)) {
           const fieldId = field === 'teamId' ? 'team' : field;
           if ($(`note-${fieldId}-error`)) $(`note-${fieldId}-error`).textContent = text;

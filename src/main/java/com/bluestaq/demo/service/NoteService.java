@@ -2,9 +2,11 @@ package com.bluestaq.demo.service;
 
 import com.bluestaq.demo.dto.NoteRequest;
 import com.bluestaq.demo.dto.NoteResponse;
+import com.bluestaq.demo.dto.NoteUpdateRequest;
 import com.bluestaq.demo.exception.InvalidTeamException;
 import com.bluestaq.demo.exception.NoteNotFoundException;
 import com.bluestaq.demo.exception.NoteOwnerOnlyException;
+import com.bluestaq.demo.exception.NoteVersionConflictException;
 import com.bluestaq.demo.model.Note;
 import com.bluestaq.demo.model.Team;
 import com.bluestaq.demo.model.User;
@@ -26,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>A note can only be assigned to a team the user is a member of (400).</li>
  *   <li>Without access, the note is reported as not found (404), never as forbidden, so
  *       callers cannot probe which note ids exist.</li>
+ *   <li>Updates must name the version they were based on; a stale version is a 409, so
+ *       concurrent edits by team members can't silently overwrite each other.</li>
  * </ul>
  */
 @Service
@@ -82,20 +86,30 @@ public class NoteService {
     }
 
     /**
-     * Replaces a note's title, content and team.
+     * Replaces a note's title, content and team, provided nobody has changed it since the
+     * caller read it.
      *
      * @param email   the authenticated caller's email
      * @param id      the note's id
-     * @param request the validated new fields; a {@code null} {@code teamId} makes the note personal
-     * @return the updated note
-     * @throws NoteNotFoundException  if it does not exist or the caller cannot access it
-     * @throws NoteOwnerOnlyException if a non-owner tries to change the note's team
-     * @throws InvalidTeamException   if the new team is one the caller is not a member of
+     * @param request the validated new fields and the version they are based on; a
+     *                {@code null} {@code teamId} makes the note personal
+     * @return the updated note, with its new version
+     * @throws NoteNotFoundException        if it does not exist or the caller cannot access it
+     * @throws NoteVersionConflictException if the note has changed since {@code request.version()}
+     * @throws NoteOwnerOnlyException       if a non-owner tries to change the note's team
+     * @throws InvalidTeamException         if the new team is one the caller is not a member of
      */
     @Transactional
-    public NoteResponse update(String email, Long id, NoteRequest request) {
+    public NoteResponse update(String email, Long id, NoteUpdateRequest request) {
         User user = currentUser(email);
         Note note = accessibleNote(id, user);
+
+        // The entity is freshly loaded in this request, so JPA's @Version check alone would
+        // always pass; comparing with the version the client read is what catches stale edits.
+        // Checked after access (so no-access stays a 404) and before anything else.
+        if (!note.getVersion().equals(request.version())) {
+            throw new NoteVersionConflictException();
+        }
 
         Team team = note.getTeam();
         // Membership is only checked when the team changes: an owner who has since left the
@@ -108,7 +122,10 @@ public class NoteService {
         }
 
         note.update(request.title(), request.content(), team);
-        return NoteResponse.from(note);
+        // Flush now so @Version is incremented (and a concurrent save that slipped in since the
+        // check above fails here, as ObjectOptimisticLockingFailureException -> 409) before the
+        // response is built; otherwise the response would carry the old version.
+        return NoteResponse.from(noteRepository.saveAndFlush(note));
     }
 
     /**

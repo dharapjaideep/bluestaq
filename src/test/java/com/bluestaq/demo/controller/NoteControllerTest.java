@@ -98,7 +98,7 @@ class NoteControllerTest {
                 .andExpect(jsonPath("$.ownerId").value(userId(ALICE)));
 
         perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content(noteJson("Groceries v2", "milk, eggs, bread", null)), ALICE)
+                .content(updateJson(id, "Groceries v2", "milk, eggs, bread", null)), ALICE)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Groceries v2"))
                 .andExpect(jsonPath("$.content").value("milk, eggs, bread"));
@@ -123,12 +123,12 @@ class NoteControllerTest {
         long id = createNote(ALICE, "Draft", null, null);
 
         perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content(noteJson("Draft", null, alphaTeamId)), ALICE)
+                .content(updateJson(id, "Draft", null, alphaTeamId)), ALICE)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.teamId").value(alphaTeamId));
 
         perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content(noteJson("Draft", null, null)), ALICE)
+                .content(updateJson(id, "Draft", null, null)), ALICE)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.teamId").doesNotExist());
     }
@@ -144,7 +144,7 @@ class NoteControllerTest {
                 .andExpect(jsonPath("$.title").value("Sprint plan"));
 
         perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content(noteJson("Sprint plan", "v2 by bob", alphaTeamId)), BOB)
+                .content(updateJson(id, "Sprint plan", "v2 by bob", alphaTeamId)), BOB)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").value("v2 by bob"))
                 // Editing does not transfer ownership.
@@ -162,7 +162,7 @@ class NoteControllerTest {
 
         // Omitting teamId on PUT means "make it personal" - an owner-only move.
         perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content(noteJson("Sprint plan", null, null)), BOB)
+                .content(updateJson(id, "Sprint plan", null, null)), BOB)
                 .andExpect(status().isForbidden());
 
         perform(get("/notes/" + id), ALICE).andExpect(jsonPath("$.teamId").value(alphaTeamId));
@@ -176,7 +176,7 @@ class NoteControllerTest {
 
         perform(get("/notes/" + id), CAROL).andExpect(status().isNotFound());
         perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content(noteJson("hijacked", null, alphaTeamId)), CAROL)
+                .content(updateJson(id, "hijacked", null, alphaTeamId)), CAROL)
                 .andExpect(status().isNotFound());
         perform(delete("/notes/" + id), CAROL).andExpect(status().isNotFound());
 
@@ -228,7 +228,7 @@ class NoteControllerTest {
         long id = createNote(CAROL, "Mine", null, null);
 
         perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
-                .content(noteJson("Mine", null, alphaTeamId)), CAROL)
+                .content(updateJson(id, "Mine", null, alphaTeamId)), CAROL)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.teamId").exists());
 
@@ -285,6 +285,67 @@ class NoteControllerTest {
                 .andExpect(jsonPath("$[*].title", containsInAnyOrder("100% done")));
     }
 
+    // --- optimistic locking ---
+
+    @Test
+    void saveWithCurrentVersionSucceedsAndIncrementsVersion() throws Exception {
+        long id = createNote(ALICE, "Plan", "v1", alphaTeamId);
+        perform(get("/notes/" + id), ALICE).andExpect(jsonPath("$.version").value(0));
+
+        perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(updateJson("Plan", "v2", alphaTeamId, 0L)), ALICE)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").value("v2"))
+                .andExpect(jsonPath("$.version").value(1));
+
+        perform(get("/notes/" + id), ALICE).andExpect(jsonPath("$.version").value(1));
+    }
+
+    @Test
+    void staleVersionReturns409AndLeavesNoteUnchanged() throws Exception {
+        long id = createNote(ALICE, "Plan", "original", alphaTeamId);
+        // Alice and Bob both open the note at version 0.
+        perform(get("/notes/" + id), ALICE).andExpect(jsonPath("$.version").value(0));
+        perform(get("/notes/" + id), BOB).andExpect(jsonPath("$.version").value(0));
+
+        perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(updateJson("Plan", "alice's edit", alphaTeamId, 0L)), ALICE)
+                .andExpect(status().isOk());
+
+        // Bob saves on top of the version he read; it's now stale.
+        perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(updateJson("Plan", "bob's edit", alphaTeamId, 0L)), BOB)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value(
+                        "This note was changed by someone else. Reload to get the latest version."));
+
+        perform(get("/notes/" + id), BOB)
+                .andExpect(jsonPath("$.content").value("alice's edit"))
+                .andExpect(jsonPath("$.version").value(1));
+    }
+
+    @Test
+    void putWithoutVersionReturns400() throws Exception {
+        long id = createNote(ALICE, "Plan", "original", null);
+
+        perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(noteJson("Plan", "no version", null)), ALICE)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.version").exists());
+
+        assertThat(noteRepository.findById(id).orElseThrow().getContent()).isEqualTo("original");
+    }
+
+    @Test
+    void noAccessIsStill404WhateverTheVersion() throws Exception {
+        long id = createNote(ALICE, "Private", null, null);
+
+        perform(put("/notes/" + id).contentType(MediaType.APPLICATION_JSON)
+                .content(updateJson("x", null, null, 99L)), CAROL)
+                .andExpect(status().isNotFound());
+    }
+
     // --- validation and auth ---
 
     @Test
@@ -323,6 +384,16 @@ class NoteControllerTest {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.id")).longValue();
+    }
+
+    /** PUT body based on the note's current version, as a client that just read it would send. */
+    private String updateJson(long id, String title, String content, Long teamId) {
+        return updateJson(title, content, teamId, noteRepository.findById(id).orElseThrow().getVersion());
+    }
+
+    private static String updateJson(String title, String content, Long teamId, Long version) {
+        String json = noteJson(title, content, teamId);
+        return json.substring(0, json.length() - 1) + ",\"version\":" + version + "}";
     }
 
     private static String noteJson(String title, String content, Long teamId) {

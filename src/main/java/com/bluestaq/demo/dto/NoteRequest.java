@@ -4,8 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 /**
- * Body of {@code POST /notes} and {@code PUT /notes/{id}}. PUT replaces the whole note, so an
- * omitted {@code teamId} makes the note personal.
+ * Body of {@code POST /notes}. Updates use {@link NoteUpdateRequest}, which also carries the
+ * note's version.
  *
  * @param title   the note's title; required, at most 255 characters
  * @param content the note's body; optional, at most 20000 characters

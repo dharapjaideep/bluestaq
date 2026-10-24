@@ -13,9 +13,10 @@ import java.time.Instant;
  * @param teamId    the note's team, or {@code null} for a personal note
  * @param createdAt when the note was created
  * @param updatedAt when the note was last changed
+ * @param version   the optimistic-locking version; send it back on {@code PUT}
  */
 public record NoteResponse(Long id, String title, String content, Long ownerId, Long teamId,
-                           Instant createdAt, Instant updatedAt) {
+                           Instant createdAt, Instant updatedAt, Long version) {
 
     /**
      * Builds the API view of a note.
@@ -25,6 +26,7 @@ public record NoteResponse(Long id, String title, String content, Long ownerId, 
      */
     public static NoteResponse from(Note note) {
         return new NoteResponse(note.getId(), note.getTitle(), note.getContent(),
-                note.getOwner().getId(), note.getTeamId(), note.getCreatedAt(), note.getUpdatedAt());
+                note.getOwner().getId(), note.getTeamId(), note.getCreatedAt(), note.getUpdatedAt(),
+                note.getVersion());
     }
 }

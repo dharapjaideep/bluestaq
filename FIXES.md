@@ -163,3 +163,47 @@
   `code-review.yml`'s `workflow_dispatch` trigger), not run on every push to `devel`.
 - `CLAUDE.md`, `PERSONAL-PREFERENCES.md` — version rules pointed at `application.yml` (left over
   from the previous project); now `src/main/resources/application.properties`.
+
+## 2026-10-24 — Persist the H2 database to disk
+- `src/main/resources/application.properties` — datasource is now `jdbc:h2:file:./data/notesdb`
+  (was in-memory), so data survives restarts. `spring.sql.init.mode=always` was already set and
+  `schema.sql` already uses `CREATE TABLE/INDEX IF NOT EXISTS`, so `schema.sql` is unchanged.
+  The demo seeder still only runs when there are no users (checked across restarts).
+- `src/test/resources/config/application.properties` — tests override the URL with
+  `jdbc:h2:mem:testdb`, so they never read or write `data/`.
+- `.gitignore` — ignore `/data/`.
+- `README.md`, `requests.http` — the database persists in `data/`; delete it to reset to the
+  demo state or after changing `schema.sql`.
+
+## 2026-10-24 — Optimistic locking on notes
+- `src/main/resources/schema.sql` (protected — diff approved by user) — `notes.version BIGINT NOT
+  NULL DEFAULT 0`. Existing local databases need `data/` deleted (CREATE TABLE IF NOT EXISTS
+  doesn't alter tables).
+- `model/Note.java` — `@Version Long version`.
+- `dto/NoteUpdateRequest.java` — new PUT body with `@NotNull version`; `NoteRequest` is now
+  POST-only. `dto/NoteResponse.java` — includes `version`.
+- `service/NoteService.java` — `update` compares the request's version with the loaded note
+  (stale → `NoteVersionConflictException`), then `saveAndFlush` so the response has the new
+  version and a racing save fails there.
+- `controller/NoteController.java` — PUT takes `NoteUpdateRequest`.
+- `exception/NoteVersionConflictException.java` — new; `ApiExceptionHandler` maps it and
+  `ObjectOptimisticLockingFailureException` to 409 with "This note was changed by someone else.
+  Reload to get the latest version."
+- `static/index.html` — keeps the loaded note's version, sends it on save, updates it from the
+  response; on 409 shows the message inline with a "Reload note" button and keeps unsaved text.
+  Also: signing out now wipes the previous user's notes/teams/editor from the page (found while
+  testing: the next user on the same tab briefly saw them while their own data loaded).
+- `NoteControllerTest.java` — existing PUTs send the current version; new tests: save with
+  current version increments it, stale version → 409 and note unchanged (Alice/Bob), PUT
+  without version → 400, no access still 404 regardless of version.
+- `requests.http` — PUTs send `version`; added stale-version (409) and missing-version (400)
+  examples. `README.md` — API table and an optimistic-locking design decision.
+
+## 2026-10-24 — README restructured to match the submission brief
+- `README.md` — new sections "Choices and scope", "Design choices I spent the most time on"
+  (authentication, access model, concurrent editing, each with alternatives considered) and
+  "Other design decisions"; "Known limitations and what I'd do next" became "Current
+  limitations" plus "If I had more time: what I'd change, add, or stop doing". Walkthrough gained
+  a concurrent-edit step; test count notes the in-memory test database; section 10's agent
+  description corrected (JaCoCo/OWASP are separate workflows, not part of the review agent).
+  No code changes.

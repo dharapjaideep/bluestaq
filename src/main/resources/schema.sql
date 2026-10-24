@@ -45,6 +45,9 @@ CREATE TABLE IF NOT EXISTS notes (
     team_id    BIGINT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    -- Optimistic-locking counter (Note.version, JPA @Version): bumped on every update so a
+    -- save based on an older read is rejected with 409 instead of overwriting newer changes.
+    version    BIGINT                   NOT NULL DEFAULT 0,
     CONSTRAINT fk_notes_owner FOREIGN KEY (owner_id) REFERENCES users (id),
     CONSTRAINT fk_notes_team FOREIGN KEY (team_id) REFERENCES teams (id)
 );

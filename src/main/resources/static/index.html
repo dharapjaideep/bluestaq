@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo — Sign in</title>
+  <!-- Empty icon so the browser does not request /favicon.ico (which would get a 401). -->
+  <link rel="icon" href="data:,">
+  <style>
+    :root {
+      --bg: #f4f5f7; --card: #ffffff; --text: #1d2330; --muted: #5d6573;
+      --border: #d5d9e0; --accent: #2f5bd3; --accent-hover: #2349b0;
+      --error-bg: #fdecec; --error-text: #a3221d; --ok-bg: #e8f5ec; --ok-text: #1d6b35;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #14171c; --card: #1e232b; --text: #e6e9ee; --muted: #9aa3b0;
+        --border: #343b46; --accent: #6d8ff0; --accent-hover: #8aa6f5;
+        --error-bg: #3a1d1d; --error-text: #f1a7a3; --ok-bg: #1b3324; --ok-text: #9fdcb2;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      padding: 16px; background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    .card {
+      width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--border);
+      border-radius: 10px; padding: 28px;
+    }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 20px; }
+    label { display: block; font-weight: 600; margin: 14px 0 4px; }
+    input {
+      width: 100%; padding: 9px 11px; font: inherit; color: var(--text); background: var(--bg);
+      border: 1px solid var(--border); border-radius: 6px;
+    }
+    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .field-error { color: var(--error-text); font-size: 13px; margin-top: 3px; min-height: 0; }
+    button {
+      width: 100%; margin-top: 20px; padding: 10px; font: inherit; font-weight: 600; color: #fff;
+      background: var(--accent); border: 0; border-radius: 6px; cursor: pointer;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .switch { text-align: center; margin: 18px 0 0; color: var(--muted); }
+    .switch a { color: var(--accent); font-weight: 600; cursor: pointer; }
+    .msg { border-radius: 6px; padding: 9px 11px; margin-bottom: 4px; }
+    .msg.error { background: var(--error-bg); color: var(--error-text); }
+    .msg.ok { background: var(--ok-bg); color: var(--ok-text); }
+    dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 16px 0 0; }
+    dt { color: var(--muted); }
+    dd { margin: 0; font-weight: 600; word-break: break-all; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main class="card">
+
+  <!-- Sign in -->
+  <section id="login-view">
+    <h1>Sign in</h1>
+    <p class="sub">Use your email and password.</p>
+    <div id="login-msg" class="msg" hidden></div>
+    <form id="login-form" novalidate>
+      <label for="login-email">Email</label>
+      <input id="login-email" type="email" autocomplete="username" required>
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password" required>
+      <button type="submit">Sign in</button>
+    </form>
+    <p class="switch">No account yet? <a id="to-register">Register account</a></p>
+  </section>
+
+  <!-- Register -->
+  <section id="register-view" hidden>
+    <h1>Register account</h1>
+    <p class="sub">Password must be 8–72 characters.</p>
+    <div id="register-msg" class="msg" hidden></div>
+    <form id="register-form" novalidate>
+      <label for="register-email">Email</label>
+      <input id="register-email" type="email" autocomplete="username" required>
+      <div id="register-email-error" class="field-error"></div>
+      <label for="register-password">Password</label>
+      <input id="register-password" type="password" autocomplete="new-password" required>
+      <div id="register-password-error" class="field-error"></div>
+      <button type="submit">Create account</button>
+    </form>
+    <p class="switch">Already registered? <a id="to-login">Sign in</a></p>
+  </section>
+
+  <!-- Signed in -->
+  <section id="home-view" hidden>
+    <h1>You're signed in</h1>
+    <p class="sub">Credentials checked with <code>GET /auth/me</code>.</p>
+    <dl>
+      <dt>User ID</dt><dd id="home-id"></dd>
+      <dt>Email</dt><dd id="home-email"></dd>
+    </dl>
+    <button id="sign-out" type="button">Sign out</button>
+  </section>
+
+</main>
+
+<script>
+  // Credentials are kept in memory only (never localStorage), so a page reload signs the
+  // user out. HTTP Basic sends them on every request; the API keeps no session.
+  let authHeader = null;
+
+  const $ = (id) => document.getElementById(id);
+
+  function show(view) {
+    for (const v of ['login-view', 'register-view', 'home-view']) $(v).hidden = v !== view;
+    const focus = { 'login-view': 'login-email', 'register-view': 'register-email' }[view];
+    if (focus) $(focus).focus();
+  }
+
+  function setMsg(id, text, kind) {
+    const el = $(id);
+    el.textContent = text || '';
+    el.className = 'msg ' + (kind || 'error');
+    el.hidden = !text;
+  }
+
+  // btoa() only handles Latin-1; encode as UTF-8 first so non-ASCII passwords work.
+  function basicAuth(email, password) {
+    const bytes = new TextEncoder().encode(email + ':' + password);
+    return 'Basic ' + btoa(String.fromCharCode(...bytes));
+  }
+
+  async function readJson(res) {
+    try { return await res.json(); } catch { return null; }
+  }
+
+  async function withBusy(form, fn) {
+    const btn = form.querySelector('button');
+    btn.disabled = true;
+    try { await fn(); }
+    catch { return 'Could not reach the server. Is it running?'; }
+    finally { btn.disabled = false; }
+  }
+
+  // ---- Sign in ----
+  $('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setMsg('login-msg', '');
+    const email = $('login-email').value.trim();
+    const password = $('login-password').value;
+    if (!email || !password) return setMsg('login-msg', 'Enter your email and password.');
+
+    const err = await withBusy(e.target, async () => {
+      const header = basicAuth(email, password);
+      // credentials: 'omit' so the browser never adds cached credentials of its own.
+      const res = await fetch('/auth/me', { headers: { Authorization: header }, credentials: 'omit' });
+      if (res.ok) {
+        const user = await res.json();
+        authHeader = header;
+        $('home-id').textContent = user.id;
+        $('home-email').textContent = user.email;
+        $('login-password').value = '';
+        show('home-view');
+      } else if (res.status === 401) {
+        setMsg('login-msg', 'Wrong email or password.');
+      } else {
+        setMsg('login-msg', 'Unexpected error (' + res.status + ').');
+      }
+    });
+    if (err) setMsg('login-msg', err);
+  });
+
+  // ---- Register ----
+  $('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setMsg('register-msg', '');
+    $('register-email-error').textContent = '';
+    $('register-password-error').textContent = '';
+    const email = $('register-email').value.trim();
+    const password = $('register-password').value;
+
+    const err = await withBusy(e.target, async () => {
+      const res = await fetch('/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify({ email, password }),
+      });
+      const body = await readJson(res);
+      if (res.status === 201) {
+        // Go to sign-in with the email filled in, so the user can log in straight away.
+        $('register-form').reset();
+        $('login-email').value = body.email;
+        show('login-view');
+        setMsg('login-msg', 'Account created for ' + body.email + '. Sign in below.', 'ok');
+        $('login-password').focus();
+      } else if (res.status === 400 && body && body.fieldErrors) {
+        $('register-email-error').textContent = body.fieldErrors.email || '';
+        $('register-password-error').textContent = body.fieldErrors.password || '';
+        setMsg('register-msg', 'Please fix the highlighted fields.');
+      } else if (res.status === 409) {
+        setMsg('register-msg', 'That email is already registered.');
+      } else {
+        setMsg('register-msg', (body && body.message) || 'Unexpected error (' + res.status + ').');
+      }
+    });
+    if (err) setMsg('register-msg', err);
+  });
+
+  // ---- Navigation ----
+  $('to-register').addEventListener('click', () => { setMsg('register-msg', ''); show('register-view'); });
+  $('to-login').addEventListener('click', () => { setMsg('login-msg', ''); show('login-view'); });
+  $('sign-out').addEventListener('click', () => {
+    authHeader = null;
+    setMsg('login-msg', 'Signed out.', 'ok');
+    show('login-view');
+  });
+</script>
+</body>
+</html>

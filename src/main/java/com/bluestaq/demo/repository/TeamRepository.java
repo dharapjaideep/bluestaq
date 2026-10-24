@@ -1,6 +1,7 @@
 package com.bluestaq.demo.repository;
 
 import com.bluestaq.demo.model.Team;
+import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,4 +20,13 @@ public interface TeamRepository extends JpaRepository<Team, Long> {
      */
     @Query("select count(t) > 0 from Team t join t.members m where t.id = :teamId and m.id = :userId")
     boolean isMember(@Param("teamId") Long teamId, @Param("userId") Long userId);
+
+    /**
+     * Lists the teams a user is a member of, by name.
+     *
+     * @param userId the user's id
+     * @return the user's teams
+     */
+    @Query("select t from Team t join t.members m where m.id = :userId order by t.name, t.id")
+    List<Team> findAllByMember(@Param("userId") Long userId);
 }

@@ -1,0 +1,67 @@
+name: Dependency Security Scan
+
+on:
+  push:
+    branches: [devel]
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Compute cache week
+        id: week
+        run: echo "week=$(date +%G-%V)" >> $GITHUB_OUTPUT
+
+      - name: Cache NVD vulnerability database
+        uses: actions/cache@v4
+        with:
+          path: target/dependency-check-data
+          key: nvd-db-${{ steps.week.outputs.week }}
+          restore-keys: |
+            nvd-db-
+
+      # NVD API occasionally returns 524 (gateway timeout)
+      # Retry handles transient failures.
+      # If both attempts fail, check status.nvd.nist.gov
+      - name: Run OWASP dependency-check
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 20
+          max_attempts: 2
+          command: mvn dependency-check:check -DnvdApiKey=$NVD_API_KEY
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+
+      - name: Print scan summary
+        if: always()
+        run: |
+          python3 -c "
+          import json, os
+          path = 'target/dependency-check-report.json'
+          if not os.path.exists(path):
+              print('No report generated (scan may have failed before completion).')
+          else:
+              data = json.load(open(path))
+              deps = data.get('dependencies', [])
+              print(f'Dependencies scanned: {len(deps)}')
+              vulns = [(v['name'], (v.get('cvssv3') or v.get('cvssv2') or {}).get('baseScore') or (v.get('cvssv3') or v.get('cvssv2') or {}).get('score'))
+                       for d in deps for v in d.get('vulnerabilities', [])]
+              if vulns:
+                  print(f'Vulnerabilities found: {len(vulns)}')
+                  for name, score in sorted(set(vulns)):
+                      print(f'  {name} (CVSS {score})')
+              else:
+                  print('Vulnerabilities found: 0')
+          "

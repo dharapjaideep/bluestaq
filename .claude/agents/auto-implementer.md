@@ -71,6 +71,9 @@ Engineering Principles — those are for human review.
    git commit -m "fix: auto-implement HIGH findings 
    from YYYY-MM-DD review [automated]"
 8. Push branch and open PR against devel with:
+   - Command form (exactly, --base devel first — the
+     workflow only permits this pattern):
+     gh pr create --base devel --title "..." --body "..."
    - Title: "Auto-fix: HIGH findings from YYYY-MM-DD review"
    - Body listing:
      · Each fix made (original HIGH)

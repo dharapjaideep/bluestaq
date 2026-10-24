@@ -125,6 +125,46 @@
 					</execution>
 				</executions>
 			</plugin>
+			<!-- Test coverage (used by .github/workflows/test-coverage.yml). prepare-agent attaches
+			     the JaCoCo agent to the test JVM; report writes target/site/jacoco/jacoco.xml at the
+			     end of the test phase, so a plain `mvn test` produces it. -->
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+				<version>0.8.15</version>
+				<executions>
+					<execution>
+						<id>prepare-agent</id>
+						<goals>
+							<goal>prepare-agent</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>report</id>
+						<phase>test</phase>
+						<goals>
+							<goal>report</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<!-- Known-vulnerability scan of dependencies (used by
+			     .github/workflows/dependency-security-scan.yml). Not bound to a phase: it downloads
+			     the NVD database, so it only runs when invoked as `mvn dependency-check:check`. -->
+			<plugin>
+				<groupId>org.owasp</groupId>
+				<artifactId>dependency-check-maven</artifactId>
+				<version>13.0.0</version>
+				<configuration>
+					<!-- Matches the path the workflow caches between runs. -->
+					<dataDirectory>${project.build.directory}/dependency-check-data</dataDirectory>
+					<!-- JSON is parsed by the workflow's summary step; HTML is for people. -->
+					<formats>
+						<format>HTML</format>
+						<format>JSON</format>
+					</formats>
+				</configuration>
+			</plugin>
 		</plugins>
 	</build>
 

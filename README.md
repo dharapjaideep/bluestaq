@@ -4,8 +4,8 @@ A note-taking service used and shared amongst several small teams. It gives user
 somewhere to capture their notes and work with them, through a REST API and a simple
 browser UI.
 
-> **Status:** early development. User registration, sign-in and the notes API (personal
-> and team notes, with search) are in place. Team management endpoints and notes in the
+> **Status:** early development. User registration, sign-in, the notes API (personal
+> and team notes, with search) and team management are in place. Notes and teams in the
 > browser UI are next.
 
 ## Tech stack
@@ -41,8 +41,8 @@ published here.
 ### Trying the API
 
 [`requests.http`](requests.http) has example requests for registration, `/auth/me` and every
-`/notes` endpoint. It uses alice, bob and carol to show the sharing rules (allowed, 403 and
-404 cases). Run it top to bottom in IntelliJ's HTTP client: later requests reuse ids
+`/notes` and `/teams` endpoint. It uses alice, bob and carol to show the sharing and
+membership rules (allowed, 403, 404 and 409 cases). Run it top to bottom in IntelliJ's HTTP client: later requests reuse ids
 captured by earlier ones.
 
 Run the tests with:
@@ -62,6 +62,10 @@ Run the tests with:
 | GET    | `/notes/{id}`    | HTTP Basic | One note.                                            |
 | PUT    | `/notes/{id}`    | HTTP Basic | Replace a note's title, content and team. Omitting `teamId` makes the note personal. |
 | DELETE | `/notes/{id}`    | HTTP Basic | Delete a note (owner only). Returns `204`.           |
+| POST   | `/teams`         | HTTP Basic | Create a team. Body: `{"name"}`. You become its creator and first member. Returns `201`. |
+| GET    | `/teams`         | HTTP Basic | Teams you're a member of, each with its members' `{id, email}`. |
+| POST   | `/teams/{id}/members` | HTTP Basic | Add an existing user. Body: `{"email"}`. Returns `201` with the updated team; `404` for an unknown email; `409` if already a member. |
+| DELETE | `/teams/{id}/members/{userId}` | HTTP Basic | Remove a member. Returns `204`.  |
 
 Passwords must be 8–72 characters. Emails are case-insensitive. Note titles are required
 (max 255 characters); content is optional (max 20,000 characters).
@@ -81,7 +85,22 @@ The rules are enforced in `NoteService`:
 | Anyone else (including a missing note id)               | `404` — existence of other users' notes is never revealed |
 | Assigning a note to a team you're not in (or that doesn't exist) | `400` on `teamId` |
 
-Teams can't be created through the API yet (the tests seed them directly).
+### Team membership rules
+
+Teams are small and trusted, so any member can add people. Enforced in `TeamService`:
+
+| Situation                                        | Result |
+|--------------------------------------------------|--------|
+| Any member adds an existing user                 | allowed |
+| A member removes themselves                      | allowed |
+| The creator removes another member               | allowed |
+| A non-creator removes someone else               | `403`  |
+| Anyone tries to remove the creator               | `409` (every team keeps at least its creator) |
+| Non-member, or a team id that doesn't exist      | `404` on every `/teams/{id}` endpoint |
+
+Note access is worked out from team membership on every request, so a removed member
+loses access to the team's notes immediately. Notes they own stay in the team, and they
+can still see those because they own them.
 
 ### Example
 
@@ -122,6 +141,19 @@ In production this would be replaced with a proper identity provider (e.g. OAuth
 OpenID Connect, optionally with MFA/OTP), served over HTTPS only, and backed by a
 persistent database such as PostgreSQL. The H2 console at `/h2-console` is a development
 convenience and must be removed before any real deployment.
+
+## CI workflows
+
+GitHub Actions in [`.github/workflows`](.github/workflows):
+
+| Workflow | Trigger | What it does |
+|----------|---------|--------------|
+| Test Coverage Guard | push to `devel` | `mvn test` with JaCoCo; prints line coverage |
+| Dependency Security Scan | push to `devel` | OWASP dependency-check against the NVD database |
+| Code Review Agent | manual | Claude reviews recent commits against the Engineering Principles in `CLAUDE.md` and commits a report to `reports/` |
+| Auto-Implementer | called when the review finds HIGH issues | Claude fixes them on a `fix/auto-*` branch and opens a PR against `devel` for human review |
+
+Required repository secrets: `ANTHROPIC_API_KEY` and `NVD_API_KEY`.
 
 ## Branches and versions
 

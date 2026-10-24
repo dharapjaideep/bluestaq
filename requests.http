@@ -159,12 +159,122 @@ Content-Type: application/json
 GET {{host}}/notes/{{privateNoteId}}
 Authorization: Basic bob@demo.com {{password}}
 
-### Alice deletes the shared note -> 204
+### Alice deletes the shared note -> 204 (teams are demonstrated below)
 DELETE {{host}}/notes/{{sharedNoteId}}
 Authorization: Basic alice@demo.com {{password}}
 
 ### The deleted note is gone -> 404
 GET {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic alice@demo.com {{password}}
+
+### ----- Teams -----
+
+### Alice lists her teams -> Engineering, with members alice and bob
+GET {{host}}/teams
+Authorization: Basic alice@demo.com {{password}}
+
+### Alice creates a team -> 201; she is its creator and first member
+POST {{host}}/teams
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "name": "Design"
+}
+
+> {% client.global.set("designTeamId", response.body.id); %}
+
+### Alice adds carol by email -> 201 with the updated member list
+POST {{host}}/teams/{{designTeamId}}/members
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "email": "carol@demo.com"
+}
+
+> {%
+    client.global.set("aliceId", response.body.members.find(m => m.email === "alice@demo.com").id);
+    client.global.set("carolId", response.body.members.find(m => m.email === "carol@demo.com").id);
+%}
+
+### Adding carol again -> 409: already a member
+POST {{host}}/teams/{{designTeamId}}/members
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "email": "carol@demo.com"
+}
+
+### Adding an unknown email -> 404
+POST {{host}}/teams/{{designTeamId}}/members
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "email": "nobody@demo.com"
+}
+
+### Bob (not in Design) tries to add himself -> 404: non-members can't see the team
+POST {{host}}/teams/{{designTeamId}}/members
+Authorization: Basic bob@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "email": "bob@demo.com"
+}
+
+### Carol (now a member) adds bob -> 201: any member can add
+POST {{host}}/teams/{{designTeamId}}/members
+Authorization: Basic carol@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "email": "bob@demo.com"
+}
+
+> {% client.global.set("bobId", response.body.members.find(m => m.email === "bob@demo.com").id); %}
+
+### Carol now sees Design in her teams
+GET {{host}}/teams
+Authorization: Basic carol@demo.com {{password}}
+
+### Alice shares a note with Design -> 201
+POST {{host}}/notes
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Design review",
+  "content": "New logo options.",
+  "teamId": {{designTeamId}}
+}
+
+> {% client.global.set("designNoteId", response.body.id); %}
+
+### Carol reads the Design note -> 200
+GET {{host}}/notes/{{designNoteId}}
+Authorization: Basic carol@demo.com {{password}}
+
+### Bob tries to remove carol -> 403: only the creator can remove others
+DELETE {{host}}/teams/{{designTeamId}}/members/{{carolId}}
+Authorization: Basic bob@demo.com {{password}}
+
+### Alice (the creator) removes carol -> 204
+DELETE {{host}}/teams/{{designTeamId}}/members/{{carolId}}
+Authorization: Basic alice@demo.com {{password}}
+
+### Carol has lost access to the Design note immediately -> 404
+GET {{host}}/notes/{{designNoteId}}
+Authorization: Basic carol@demo.com {{password}}
+
+### Bob removes himself -> 204: members can always leave
+DELETE {{host}}/teams/{{designTeamId}}/members/{{bobId}}
+Authorization: Basic bob@demo.com {{password}}
+
+### Alice tries to remove herself -> 409: the creator can't be removed
+DELETE {{host}}/teams/{{designTeamId}}/members/{{aliceId}}
 Authorization: Basic alice@demo.com {{password}}
 
 ### ----- Unauthenticated -----

@@ -103,3 +103,35 @@
 - `requests.http` — new; example requests for register, `/auth/me` and every `/notes` endpoint,
   showing the sharing rules with alice, bob and carol.
 - `README.md` — demo credentials, how seeding is controlled, `requests.http`.
+
+## 2026-10-24 — Team management endpoints
+- `controller/TeamController.java` — new; `POST /teams`, `GET /teams`,
+  `POST /teams/{id}/members`, `DELETE /teams/{id}/members/{userId}`; thin delegator.
+- `service/TeamService.java` — new; creator becomes first member; any member can add an
+  existing user (404 unknown email, 409 already a member, PK violation from a concurrent add
+  also mapped to 409); members can remove themselves, only the creator can remove others (403),
+  the creator can't be removed (409); non-members get 404 on every team endpoint.
+- `model/Team.java` — `removeMember`, `hasMember`, `isCreatedBy` helpers.
+- `repository/TeamRepository.java` — `findAllByMember` query.
+- `dto/TeamRequest.java`, `dto/AddMemberRequest.java`, `dto/TeamResponse.java` — new.
+- `exception/TeamNotFoundException.java`, `UserNotFoundException.java`,
+  `TeamCreatorOnlyException.java`, `TeamMembershipConflictException.java` — new;
+  `ApiExceptionHandler` maps them to 404/404/403/409.
+- `src/test/java/com/bluestaq/demo/controller/TeamControllerTest.java` — new; 16 tests incl.
+  removed member losing access to team notes immediately.
+- `NoteControllerTest.java` — Javadoc no longer says team endpoints don't exist.
+- `requests.http` — team section showing add/remove rules and access revocation.
+- `README.md` — team endpoints and membership rules; status updated.
+
+## 2026-10-24 — Adapt GitHub workflows copied from another project
+- `pom.xml` — added `jacoco-maven-plugin` 0.8.15 (agent + report bound to the test phase) and
+  `dependency-check-maven` 13.0.0 (data dir under `target/` to match the workflow cache, HTML +
+  JSON reports); without them the coverage and dependency-scan workflows could not run.
+- `.github/workflows/test-coverage.yml` — `mvn test` (report is now bound to the test phase);
+  removed `SPRING_PROFILES_ACTIVE=test`, a profile this project doesn't have.
+- `.github/workflows/auto-implement.yml` — PR permission narrowed from `gh pr create *` to
+  `gh pr create --base devel *`: master is the default branch, so an unqualified PR would
+  target it (least privilege / defence in depth with the agent prompt).
+- `.claude/agents/auto-implementer.md` — states the exact `gh pr create --base devel ...` form
+  the workflow permits.
+- `README.md` — CI workflows section and required secrets.

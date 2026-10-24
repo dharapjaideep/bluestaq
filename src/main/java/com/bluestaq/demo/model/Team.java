@@ -70,6 +70,36 @@ public class Team {
         members.add(user);
     }
 
+    /**
+     * Removes a user from the team; removing a non-member has no effect.
+     *
+     * @param userId the id of the user to remove
+     * @return {@code true} if the user was a member and has been removed
+     */
+    public boolean removeMember(Long userId) {
+        return members.removeIf(member -> member.getId().equals(userId));
+    }
+
+    /**
+     * Checks whether a user is a member of this team.
+     *
+     * @param userId the user's id
+     * @return {@code true} if the user is a member
+     */
+    public boolean hasMember(Long userId) {
+        return members.stream().anyMatch(member -> member.getId().equals(userId));
+    }
+
+    /**
+     * Checks whether a user created this team.
+     *
+     * @param userId the user's id
+     * @return {@code true} if the user is the team's creator
+     */
+    public boolean isCreatedBy(Long userId) {
+        return createdBy.getId().equals(userId);
+    }
+
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();

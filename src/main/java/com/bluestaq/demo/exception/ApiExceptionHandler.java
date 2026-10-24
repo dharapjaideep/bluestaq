@@ -90,6 +90,39 @@ public class ApiExceptionHandler {
     }
 
     /**
+     * A team or user that does not exist, or that the caller cannot see.
+     *
+     * @param e the not-found exception
+     * @return 404 Not Found
+     */
+    @ExceptionHandler({TeamNotFoundException.class, UserNotFoundException.class})
+    public ResponseEntity<ApiError> handleTeamOrUserNotFound(RuntimeException e) {
+        return error(HttpStatus.NOT_FOUND, e.getMessage(), Map.of());
+    }
+
+    /**
+     * A creator-only team action attempted by another member.
+     *
+     * @param e the creator-only exception
+     * @return 403 Forbidden
+     */
+    @ExceptionHandler(TeamCreatorOnlyException.class)
+    public ResponseEntity<ApiError> handleCreatorOnly(TeamCreatorOnlyException e) {
+        return error(HttpStatus.FORBIDDEN, e.getMessage(), Map.of());
+    }
+
+    /**
+     * A membership change that conflicts with the team's state.
+     *
+     * @param e the conflict exception
+     * @return 409 Conflict
+     */
+    @ExceptionHandler(TeamMembershipConflictException.class)
+    public ResponseEntity<ApiError> handleMembershipConflict(TeamMembershipConflictException e) {
+        return error(HttpStatus.CONFLICT, e.getMessage(), Map.of());
+    }
+
+    /**
      * A path or query parameter of the wrong type, e.g. {@code /notes/abc}.
      *
      * @param e the type-mismatch exception

@@ -31,7 +31,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 
 /**
  * End-to-end tests for {@code /notes} through the real security filter chain and in-memory
- * database. Teams are seeded directly through the repositories (there are no team endpoints yet).
+ * database. Teams are seeded directly through the repositories to keep these tests independent
+ * of the team endpoints (covered by {@link TeamControllerTest}).
  *
  * <p>Cast: alice and bob are members of team "Alpha"; carol is in no team.
  */

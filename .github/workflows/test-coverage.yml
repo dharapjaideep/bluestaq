@@ -1,0 +1,49 @@
+name: Test Coverage Guard
+
+on:
+  push:
+    branches: [devel]
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # The JaCoCo report goal is bound to the test phase in pom.xml, so this also writes
+      # target/site/jacoco/jacoco.xml. No Spring profile is needed: test settings come from
+      # src/test/resources/config/application.properties.
+      - name: Run tests with coverage
+        run: mvn test
+
+      - name: Extract coverage
+        id: coverage
+        run: |
+          COVERAGE=$(python3 -c "
+          import xml.etree.ElementTree as ET
+          tree = ET.parse('target/site/jacoco/jacoco.xml')
+          root = tree.getroot()
+          for counter in root.findall('counter'):
+            if counter.get('type') == 'LINE':
+              missed = int(counter.get('missed'))
+              covered = int(counter.get('covered'))
+              total = missed + covered
+              pct = round(covered / total * 100, 1)
+              print(pct)
+              break
+          ")
+          echo "line_coverage=$COVERAGE" >> $GITHUB_OUTPUT
+
+      - name: Print coverage summary
+        run: |
+          echo "Line Coverage: ${{ steps.coverage.outputs.line_coverage }}%"

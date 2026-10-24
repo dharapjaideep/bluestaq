@@ -30,8 +30,8 @@ it on first run, which needs internet access.
 ./mvnw spring-boot:run      # Windows: mvnw.cmd spring-boot:run
 ```
 
-Open **<http://localhost:8080/>**. Run the tests (69 tests, MockMvc against the real security
-chain and an in-memory database):
+Open **<http://localhost:8080/>**. Run the tests (69 tests: MockMvc end-to-end tests through the
+real security chain, plus schema and demo-seeding tests, all on an in-memory database):
 
 ```bash
 ./mvnw test
@@ -67,8 +67,8 @@ after changing `schema.sql`), stop the app, delete `data/` and start it again.
 ## 5. API overview
 
 All endpoints except registration use HTTP Basic. **[`requests.http`](requests.http)** has a
-runnable example for every endpoint, using alice/bob/carol to show the allowed, 403, 404
-and 409 cases. Run it top to bottom in IntelliJ's HTTP client.
+runnable example for every endpoint, using alice/bob/carol to show the allowed, 400, 403,
+404 and 409 cases. Run it top to bottom in IntelliJ's HTTP client.
 
 | Endpoint | Notes |
 |----------|-------|
@@ -158,9 +158,8 @@ nothing is overwritten or lost.
   protection), logout/revocation, ideally via an OIDC provider with MFA.
 - **H2 → PostgreSQL + Flyway:** versioned migrations replace `schema.sql`, and `data/` resets
   are no longer needed.
-- **Demo settings into a `demo` Spring profile:** demo seeding (and, if wanted, the H2
-  console with a real database password) would only run when that profile is active, never
-  by default.
+- **Demo settings into a `demo` Spring profile:** demo seeding and the demo database
+  settings would only apply when that profile is active, never by default.
 
 **Add**
 - **Admin- or invite-only registration:** team invites instead of open sign-up, which also
@@ -196,8 +195,8 @@ any new project, and it sets guidelines and guardrails for how the AI works in t
   with HIGH/MEDIUM/LOW findings. If there are HIGH findings, the auto-implementer agent fixes
   them on a separate branch and opens a pull request for human review. It never commits to
   `devel` directly. In my usual setup the review runs automatically on every push to
-  `devel`; here it's set to a manual trigger because it needs the Claude GitHub App and the
-  `ANTHROPIC_API_KEY` secret configured. Switching to on-push is a one-line change.
+  `devel`; here it's set to a manual trigger because it needs the `ANTHROPIC_API_KEY` secret
+  configured. Switching to on-push is a one-line change.
 
 The project-specific parts (the project description, package structure, and schema rules)
 were written for this project. Several decisions in this README came out of that setup. For

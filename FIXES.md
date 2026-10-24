@@ -227,3 +227,13 @@
   setup for reviewers) and states the production-grade auth target; section 9 "Stop doing" adds
   "Front-loading authentication"; section 10 explains why the review agent is manual here and
   on-push in the usual setup. No code changes.
+
+## 2026-10-24 — README consistency pass; DEMO-ONLY labels
+- `README.md` — section 10 no longer says the review needs the Claude GitHub App (it only needs
+  the `ANTHROPIC_API_KEY` secret); section 3 describes the 69 tests accurately (not all MockMvc);
+  section 5 lists the 400 cases `requests.http` shows; section 9 no longer suggests re-enabling
+  the H2 console under a demo profile. H2 console mentions in sections 7–8 were already correct.
+- `src/main/resources/application.properties` — the two TEMPORARY markers (file-based H2 with
+  `sa`/empty password, demo seeding) relabelled DEMO-ONLY with a production note. Comments only.
+- `src/main/resources/static/index.html` — DEMO-ONLY comment on the sign-in page's demo
+  credentials hint. Comment only.

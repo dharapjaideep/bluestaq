@@ -153,3 +153,13 @@
 - `README.md` — restructured: overview, running, demo credentials + walkthrough, API overview
   (pointing to `requests.http`), design decisions, limitations and next steps. Removed
   duplicated sections and an outdated curl example. No code changes.
+
+## 2026-10-24 — README "How I work with Claude Code"; agent project name
+- `README.md` — new section 6 describing the Claude Code setup (CLAUDE.md,
+  PERSONAL-PREFERENCES.md, `.claude/agents/`) carried over from a previous project.
+- `.claude/agents/code-review.md` — identity line said "the Notify project" (left over from the
+  previous project); now "the Notes Service project".
+- `README.md` — section 6 now says the code-review agent is started manually (matches
+  `code-review.yml`'s `workflow_dispatch` trigger), not run on every push to `devel`.
+- `CLAUDE.md`, `PERSONAL-PREFERENCES.md` — version rules pointed at `application.yml` (left over
+  from the previous project); now `src/main/resources/application.properties`.

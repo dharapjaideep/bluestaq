@@ -122,12 +122,35 @@ with per-field messages.
 5. **Per-note sharing** with individual users and read-only vs edit permissions, alongside
    team sharing.
 
+## 6. How I work with Claude Code
+
+This project was built with Claude Code. I didn't start from a blank setup: I copied my
+standard Claude Code environment from a previous project. It's my default starting point for
+any new project, and it sets guidelines and guardrails for how the AI works in the codebase:
+
+- **[`CLAUDE.md`](CLAUDE.md):** engineering principles (least privilege, defence in depth,
+  fail safe, auditability), architecture rules, code-commenting conventions, protected files
+  (`SecurityConfig.java`, `schema.sql`) that need human review before changes, and a rule to
+  stop and ask rather than assume when requirements are unclear.
+- **[`PERSONAL-PREFERENCES.md`](PERSONAL-PREFERENCES.md):** my workflow conventions: the
+  `devel` → `staging` → `master` branching strategy, version bumping, and post-merge checks.
+- **[`.claude/agents/`](.claude/agents):** two agents run by GitHub Actions. The code-review
+  agent is started manually; it reviews the changes on `devel` for design and security
+  issues and writes a report with HIGH/MEDIUM/LOW findings. If there are HIGH findings, the
+  auto-implementer agent fixes them on a separate branch and opens a pull request for human
+  review. It never commits to `devel` directly.
+
+The project-specific parts (the project description, package structure, and schema rules)
+were written for this project. Several decisions in this README came out of that setup. For
+example, `schema.sql` as the source of truth and the 404-vs-403 policy were checked against
+these rules as the code was written. Every code change is logged in [`FIXES.md`](FIXES.md).
+
 ## Repository
 
 - **Branches:** `devel` (active), `staging` (tested), `master` (public, default). The version
   is in [`VERSION`](VERSION), mirrored as `app.version`.
 - **Change log:** every code change is recorded in [`FIXES.md`](FIXES.md).
 - **CI** ([`.github/workflows`](.github/workflows)): JaCoCo coverage and an OWASP dependency
-  scan on push to `devel`, plus an AI code-review agent whose HIGH findings trigger an
+  scan on push to `devel`, plus a manually started AI code-review agent whose HIGH findings trigger an
   auto-fix PR for human review. The workflows need the `ANTHROPIC_API_KEY` and
   `NVD_API_KEY` secrets.

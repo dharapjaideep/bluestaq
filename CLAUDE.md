@@ -156,7 +156,7 @@ devel → staging → master:
    - Push to devel → increment patch
    - Merge to master → increment minor, reset patch
 3. Update VERSION file (repo root)
-4. Update app.version in application.yml
+4. Update app.version in src/main/resources/application.properties
 5. Include these changes in the commit
 
 DO NOT push or merge without completing

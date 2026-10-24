@@ -62,13 +62,13 @@ Invariant: devel must never be behind staging or master on version number.
 After every commit and push to devel (routine dev work, not the merge pipeline):
   Increment patch version (0.8.1 → 0.8.2)
   Update VERSION file
-  Update app.version in application.yml
+  Update app.version in src/main/resources/application.properties
   Display: "Version bumped to X.X.X"
 
 Before running the devel → staging → master merge pipeline:
   1. On devel FIRST — increment minor version, reset patch to 0 (0.8.2 → 0.9.0)
   2. Update VERSION file
-  3. Update app.version in application.yml
+  3. Update app.version in src/main/resources/application.properties
   4. Commit and push this bump to devel
   5. THEN run the merge pipeline: devel → staging → master. The fast-forward
      merges carry the already-bumped version through to staging and master —

@@ -4,8 +4,9 @@ A note-taking service used and shared amongst several small teams. It gives user
 somewhere to capture their notes and work with them, through a REST API and a simple
 browser UI.
 
-> **Status:** early development. User registration and sign-in are in place; the notes
-> features themselves are the next piece of work.
+> **Status:** early development. User registration, sign-in and the notes API (personal
+> and team notes, with search) are in place. Team management endpoints and notes in the
+> browser UI are next.
 
 ## Tech stack
 
@@ -20,7 +21,29 @@ browser UI.
 ./mvnw spring-boot:run      # Windows: mvnw.cmd spring-boot:run
 ```
 
-Then open <http://localhost:8080/> to register an account and sign in.
+Then open <http://localhost:8080/> to register an account, or sign in with a demo account.
+
+### Demo data
+
+On startup, if the database has no users, demo data is created (`DemoDataSeeder`):
+
+| Email            | Password      | Team        | Notes                                    |
+|------------------|---------------|-------------|------------------------------------------|
+| `alice@demo.com` | `password123` | Engineering | 1 personal note; owns 2 Engineering notes |
+| `bob@demo.com`   | `password123` | Engineering | 1 personal note; can read and edit the Engineering notes |
+| `carol@demo.com` | `password123` | —           | 1 personal note; can't see any Engineering notes |
+
+The database is in-memory, so restarting the app resets the demo data. Seeding is controlled
+by `app.demo-data.enabled` in `application.properties`: it is off unless set to `true`, and
+it is off during tests. Turn it off before any real deployment, because the demo password is
+published here.
+
+### Trying the API
+
+[`requests.http`](requests.http) has example requests for registration, `/auth/me` and every
+`/notes` endpoint. It uses alice, bob and carol to show the sharing rules (allowed, 403 and
+404 cases). Run it top to bottom in IntelliJ's HTTP client: later requests reuse ids
+captured by earlier ones.
 
 Run the tests with:
 
@@ -34,10 +57,38 @@ Run the tests with:
 |--------|------------------|------------|------------------------------------------------------|
 | POST   | `/auth/register` | public     | Create an account. Body: `{"email", "password"}`. Returns `201` with `{id, email}`; `409` if the email is taken; `400` on validation errors. |
 | GET    | `/auth/me`       | HTTP Basic | Returns the signed-in user's `{id, email}`.           |
+| POST   | `/notes`         | HTTP Basic | Create a note. Body: `{"title", "content", "teamId"?}`. Returns `201`. |
+| GET    | `/notes`         | HTTP Basic | Notes you can access, most recently updated first. Optional `?teamId=` filter and `?q=` case-insensitive search on title and content. |
+| GET    | `/notes/{id}`    | HTTP Basic | One note.                                            |
+| PUT    | `/notes/{id}`    | HTTP Basic | Replace a note's title, content and team. Omitting `teamId` makes the note personal. |
+| DELETE | `/notes/{id}`    | HTTP Basic | Delete a note (owner only). Returns `204`.           |
 
-Passwords must be 8–72 characters. Emails are case-insensitive.
+Passwords must be 8–72 characters. Emails are case-insensitive. Note titles are required
+(max 255 characters); content is optional (max 20,000 characters).
 
 Errors are returned as JSON (`ApiError`).
+
+### Note access rules
+
+A note belongs to its owner and, optionally, to one team (`teamId` null = personal note).
+The rules are enforced in `NoteService`:
+
+| Situation                                               | Result |
+|---------------------------------------------------------|--------|
+| Owner: read, edit, delete, move between their own teams | allowed |
+| Member of the note's team: read and edit                | allowed |
+| Member of the note's team: delete, or change `teamId`   | `403`  |
+| Anyone else (including a missing note id)               | `404` — existence of other users' notes is never revealed |
+| Assigning a note to a team you're not in (or that doesn't exist) | `400` on `teamId` |
+
+Teams can't be created through the API yet (the tests seed them directly).
+
+### Example
+
+```bash
+curl -u alice@example.com:correct-horse -H 'Content-Type: application/json'      -d '{"title":"Sprint plan","content":"Ship notes API"}' http://localhost:8080/notes
+curl -u alice@example.com:correct-horse 'http://localhost:8080/notes?q=sprint'
+```
 
 ## Project structure
 
@@ -55,6 +106,9 @@ Package-by-layer under `com.bluestaq.demo`:
 
 The browser UI is `src/main/resources/static/index.html`, served at `/`.
 
+Data model: `users`, `teams`, `team_members` (composite key) and `notes` (owner required,
+team optional).
+
 The database schema is owned by `src/main/resources/schema.sql`; Hibernate runs with
 `ddl-auto=validate`, so startup fails if the entities drift from the schema.
 
@@ -68,6 +122,12 @@ In production this would be replaced with a proper identity provider (e.g. OAuth
 OpenID Connect, optionally with MFA/OTP), served over HTTPS only, and backed by a
 persistent database such as PostgreSQL. The H2 console at `/h2-console` is a development
 convenience and must be removed before any real deployment.
+
+## Branches and versions
+
+- `devel` — active development; `staging` — tested, demo-ready; `master` — public (default).
+- The current version is in [`VERSION`](VERSION) (mirrored as `app.version` in
+  `application.properties`).
 
 ## Change log
 

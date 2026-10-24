@@ -1,0 +1,173 @@
+# Example requests for the Notes Service (IntelliJ HTTP Client format).
+#
+# Start the app first (./mvnw spring-boot:run). The demo data seeder creates:
+#   alice@demo.com, bob@demo.com, carol@demo.com  (password: password123)
+#   team "Engineering" with alice and bob as members (carol is not in it)
+# Run the requests top to bottom: later ones reuse ids captured by earlier ones.
+# The data is in-memory, so restart the app to reset it.
+
+@host = http://localhost:8080
+@password = password123
+
+### ----- Auth -----
+
+### Register a new account -> 201 (409 if you run it twice: the email is taken)
+POST {{host}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "dave@demo.com",
+  "password": "password123"
+}
+
+### Who am I? -> 200 with alice's id and email
+GET {{host}}/auth/me
+Authorization: Basic alice@demo.com {{password}}
+
+### Wrong password -> 401
+GET {{host}}/auth/me
+Authorization: Basic alice@demo.com wrong-password
+
+### ----- Listing and search -----
+
+### Alice lists her notes -> her personal note + both Engineering notes
+GET {{host}}/notes
+Authorization: Basic alice@demo.com {{password}}
+
+> {%
+    // Remember the Engineering team id for the requests below.
+    client.global.set("teamId", response.body.find(note => note.teamId !== null).teamId);
+%}
+
+### Bob lists his notes -> his personal note + the Engineering notes (not alice's personal note)
+GET {{host}}/notes
+Authorization: Basic bob@demo.com {{password}}
+
+### Carol lists her notes -> only her own; she is not in Engineering
+GET {{host}}/notes
+Authorization: Basic carol@demo.com {{password}}
+
+### Filter by team -> only Engineering notes
+GET {{host}}/notes?teamId={{teamId}}
+Authorization: Basic alice@demo.com {{password}}
+
+### Case-insensitive search in title and content -> "Sprint 12 plan"
+GET {{host}}/notes?q=SPRINT
+Authorization: Basic bob@demo.com {{password}}
+
+### ----- Create -----
+
+### Alice creates a note shared with Engineering -> 201
+POST {{host}}/notes
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Release checklist",
+  "content": "Tag the build; update the changelog.",
+  "teamId": {{teamId}}
+}
+
+> {% client.global.set("sharedNoteId", response.body.id); %}
+
+### Alice creates a personal note -> 201 (no teamId = personal)
+POST {{host}}/notes
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Alice's private draft",
+  "content": "Only alice can see this."
+}
+
+> {% client.global.set("privateNoteId", response.body.id); %}
+
+### Carol tries to create a note in Engineering -> 400 (fieldErrors.teamId): she is not a member
+POST {{host}}/notes
+Authorization: Basic carol@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Sneaky",
+  "teamId": {{teamId}}
+}
+
+### Blank title -> 400 (fieldErrors.title)
+POST {{host}}/notes
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": " "
+}
+
+### ----- Sharing rules: team member (bob) -----
+
+### Bob reads alice's shared note -> 200
+GET {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic bob@demo.com {{password}}
+
+### Bob edits the shared note -> 200 (PUT replaces the note, so he sends the teamId back)
+PUT {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic bob@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Release checklist",
+  "content": "Tag the build; update the changelog; notify QA. (edited by bob)",
+  "teamId": {{teamId}}
+}
+
+### Bob tries to move it out of the team (no teamId = personal) -> 403: only the owner can move it
+PUT {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic bob@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Release checklist",
+  "content": "Mine now"
+}
+
+### Bob tries to delete the shared note -> 403: only the owner can delete
+DELETE {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic bob@demo.com {{password}}
+
+### Bob tries to read alice's personal note -> 404 (not 403, so its existence isn't revealed)
+GET {{host}}/notes/{{privateNoteId}}
+Authorization: Basic bob@demo.com {{password}}
+
+### ----- Sharing rules: non-member (carol) -----
+
+### Carol tries to read the Engineering note -> 404
+GET {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic carol@demo.com {{password}}
+
+### ----- Owner actions (alice) -----
+
+### Alice moves her personal note into Engineering -> 200; bob can now see it
+PUT {{host}}/notes/{{privateNoteId}}
+Authorization: Basic alice@demo.com {{password}}
+Content-Type: application/json
+
+{
+  "title": "Alice's draft (now shared)",
+  "content": "Shared with Engineering.",
+  "teamId": {{teamId}}
+}
+
+### Bob reads the newly shared note -> 200
+GET {{host}}/notes/{{privateNoteId}}
+Authorization: Basic bob@demo.com {{password}}
+
+### Alice deletes the shared note -> 204
+DELETE {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic alice@demo.com {{password}}
+
+### The deleted note is gone -> 404
+GET {{host}}/notes/{{sharedNoteId}}
+Authorization: Basic alice@demo.com {{password}}
+
+### ----- Unauthenticated -----
+
+### No credentials -> 401
+GET {{host}}/notes

@@ -66,3 +66,40 @@
 - `VERSION` — new; repo-root version file, starting at `0.1.0`.
 - `src/main/resources/application.properties` — added `app.version=0.1.0`, kept in sync with
   `VERSION` per the version management rules in `PERSONAL-PREFERENCES.md`.
+
+## 2026-10-24 — Core notes domain: teams, memberships, notes CRUD and search
+- `src/main/resources/schema.sql` (protected — change requested by user) — new `teams`,
+  `team_members` (composite PK) and `notes` tables with foreign keys and lookup indexes.
+  `notes.content` is `VARCHAR(20000)` rather than `TEXT` so the DDL is portable between H2
+  and PostgreSQL.
+- `model/Team.java`, `model/Note.java` — new entities; team membership mapped as a
+  `@ManyToMany` over `team_members`.
+- `repository/TeamRepository.java`, `repository/NoteRepository.java` — new; membership check
+  and "accessible notes" queries (access rule applied in the query itself).
+- `service/NoteService.java` — new; create/list/get/update/delete with the access rules:
+  owner or team member can read/edit; only the owner can delete or change the team (403);
+  assigning to a team you're not in is a 400; no access is a 404. Search escapes LIKE wildcards.
+- `controller/NoteController.java` — new; `/notes` endpoints, thin delegator.
+- `dto/NoteRequest.java`, `dto/NoteResponse.java` — new request/response records.
+- `exception/NoteNotFoundException.java`, `NoteOwnerOnlyException.java`,
+  `InvalidTeamException.java` — new; `ApiExceptionHandler` maps them to 404/403/400 and maps
+  bad path/query parameter types to 400.
+- `src/test/java/com/bluestaq/demo/controller/NoteControllerTest.java` — new; 17 MockMvc tests
+  for owner CRUD, member permissions, 404 for non-members, team assignment, listing and search.
+- `README.md` — notes endpoints, access rules, data model, branches/versions.
+
+## 2026-10-24 — Demo data seeder and example HTTP requests
+- `config/DemoDataSeeder.java` — new `CommandLineRunner`; runs only when
+  `app.demo-data.enabled=true` (off if the property is missing) and delegates to the service.
+- `service/DemoDataService.java` — new; when the database has no users, creates
+  alice/bob/carol@demo.com (BCrypt-hashed `password123`), team "Engineering" (alice, bob), one
+  personal note each and two Engineering notes owned by alice. Kept in a service because only
+  services may use repositories.
+- `src/main/resources/application.properties` — `app.demo-data.enabled=true` (marked TEMPORARY).
+- `src/test/resources/config/application.properties` — new; sets `app.demo-data.enabled=false`
+  for all tests.
+- `src/test/java/com/bluestaq/demo/service/DemoDataServiceTest.java` — new; seeding into an empty
+  database, no-op when users exist, seeder bean absent in tests.
+- `requests.http` — new; example requests for register, `/auth/me` and every `/notes` endpoint,
+  showing the sharing rules with alice, bob and carol.
+- `README.md` — demo credentials, how seeding is controlled, `requests.http`.

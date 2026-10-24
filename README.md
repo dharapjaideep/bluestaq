@@ -1,186 +1,133 @@
 # Notes Service
 
-A note-taking service used and shared amongst several small teams. It gives users
-somewhere to capture their notes and work with them, through a REST API and a simple
-browser UI.
+A note-taking service for small teams. Users register, write personal notes, and share
+notes with teams they belong to. Any team member can read and edit the team's notes; only
+the owner can delete a note or move it to another team. It's a Spring Boot REST API with a
+plain HTML/JS browser UI on top, built as a time-boxed take-home exercise.
 
-> **Status:** early development. User registration, sign-in, the notes API (personal
-> and team notes, with search), team management and a browser UI for all of it are in
-> place.
+**Stack:** Java 21 · Spring Boot 4.1.1 (Web MVC, Data JPA, Security, Validation) · H2
+in-memory database · Maven · plain HTML/CSS/JS (no build step)
 
-## Tech stack
+## 1. Running it
 
-- Java 21, Spring Boot 4.1.1 (Web MVC, Data JPA, Security, Validation)
-- H2 in-memory database (development only — data is lost on restart)
-- Maven (wrapper included)
-- Plain HTML/CSS/JS front end, no build step
-
-## Running it
+**Prerequisites:** JDK 21 and free port 8080. Maven isn't required: the wrapper downloads
+it on first run, which needs internet access.
 
 ```bash
 ./mvnw spring-boot:run      # Windows: mvnw.cmd spring-boot:run
 ```
 
-Then open <http://localhost:8080/> to register an account, or sign in with a demo account.
-
-### Browser UI
-
-Open <http://localhost:8080/> and sign in (e.g. `alice@demo.com` / `password123`), or
-register a new account. The UI is a single page, `src/main/resources/static/index.html`
-(plain HTML/CSS/JS, no build step), that only calls the REST API:
-
-- **Notes:** a sidebar filter (All, Personal, or one of your teams), search, and a list
-  showing each note's team (or "Personal") and when it was last updated.
-- **Editor:** create, view, edit and delete notes. "Shared with" picks Personal or one of
-  your teams. If you don't own a note, the team picker is disabled and Delete is hidden.
-  The server enforces the same rules, and the UI shows its 403 if one comes back.
-- **Teams:** "Manage teams" lets you create a team, see its members, add members by email
-  and remove members. Remove/Leave buttons only appear where you're allowed to use them.
-- **Errors** (400, 403, 404, 409) appear as inline messages. A 401 sends you back to the
-  sign-in screen.
-
-Credentials are kept in `sessionStorage` for the current tab only: a page reload keeps you
-signed in, and signing out or closing the tab clears them. Sign in as `bob@demo.com` in
-another browser profile to watch sharing between users.
-
-### Demo data
-
-On startup, if the database has no users, demo data is created (`DemoDataSeeder`):
-
-| Email            | Password      | Team        | Notes                                    |
-|------------------|---------------|-------------|------------------------------------------|
-| `alice@demo.com` | `password123` | Engineering | 1 personal note; owns 2 Engineering notes |
-| `bob@demo.com`   | `password123` | Engineering | 1 personal note; can read and edit the Engineering notes |
-| `carol@demo.com` | `password123` | —           | 1 personal note; can't see any Engineering notes |
-
-The database is in-memory, so restarting the app resets the demo data. Seeding is controlled
-by `app.demo-data.enabled` in `application.properties`: it is off unless set to `true`, and
-it is off during tests. Turn it off before any real deployment, because the demo password is
-published here.
-
-### Trying the API
-
-[`requests.http`](requests.http) has example requests for registration, `/auth/me` and every
-`/notes` and `/teams` endpoint. It uses alice, bob and carol to show the sharing and
-membership rules (allowed, 403, 404 and 409 cases). Run it top to bottom in IntelliJ's HTTP client: later requests reuse ids
-captured by earlier ones.
-
-Run the tests with:
+Open **<http://localhost:8080/>**. Run the tests (62 tests, MockMvc against the real security
+chain and database):
 
 ```bash
 ./mvnw test
 ```
 
-## API
+## 2. Demo credentials and a 2-minute walkthrough
 
-| Method | Path             | Auth       | Description                                          |
-|--------|------------------|------------|------------------------------------------------------|
-| POST   | `/auth/register` | public     | Create an account. Body: `{"email", "password"}`. Returns `201` with `{id, email}`; `409` if the email is taken; `400` on validation errors. |
-| GET    | `/auth/me`       | HTTP Basic | Returns the signed-in user's `{id, email}`.           |
-| POST   | `/notes`         | HTTP Basic | Create a note. Body: `{"title", "content", "teamId"?}`. Returns `201`. |
-| GET    | `/notes`         | HTTP Basic | Notes you can access, most recently updated first. Optional `?teamId=` filter and `?q=` case-insensitive search on title and content. |
-| GET    | `/notes/{id}`    | HTTP Basic | One note.                                            |
-| PUT    | `/notes/{id}`    | HTTP Basic | Replace a note's title, content and team. Omitting `teamId` makes the note personal. |
-| DELETE | `/notes/{id}`    | HTTP Basic | Delete a note (owner only). Returns `204`.           |
-| POST   | `/teams`         | HTTP Basic | Create a team. Body: `{"name"}`. You become its creator and first member. Returns `201`. |
-| GET    | `/teams`         | HTTP Basic | Teams you're a member of, each with its members' `{id, email}`. |
-| POST   | `/teams/{id}/members` | HTTP Basic | Add an existing user. Body: `{"email"}`. Returns `201` with the updated team; `404` for an unknown email; `409` if already a member. |
-| DELETE | `/teams/{id}/members/{userId}` | HTTP Basic | Remove a member. Returns `204`.  |
+When the database is empty at startup, demo data is seeded. It's in-memory, so restarting
+the app resets it.
 
-Passwords must be 8–72 characters. Emails are case-insensitive. Note titles are required
-(max 255 characters); content is optional (max 20,000 characters).
+| Email            | Password      | Team        | Has                                       |
+|------------------|---------------|-------------|-------------------------------------------|
+| `alice@demo.com` | `password123` | Engineering (creator) | 1 personal note; owns 2 Engineering notes |
+| `bob@demo.com`   | `password123` | Engineering | 1 personal note                           |
+| `carol@demo.com` | `password123` | —           | 1 personal note                           |
 
-Errors are returned as JSON (`ApiError`).
+1. **Alice:** sign in. You see 3 notes: her personal note and two Engineering notes. Try the
+   **Personal** / **Engineering** filters and search for `sprint`.
+2. Open **Sprint 12 plan** and edit it. Then click **New** and create a note shared with
+   Engineering.
+3. **Bob:** sign in from a private window (sessions are per browser tab). He sees the
+   Engineering notes, including Alice's new one, but not her personal note. On **Sprint 12
+   plan** he can edit, but the team picker is disabled and there's no Delete.
+4. **Alice → Manage teams:** remove Bob. When Bob reloads, the Engineering notes are gone,
+   because access is checked on every request.
+5. **Carol:** only ever sees her own note. Adding her to Engineering in step 4 instead
+   would give her the team's notes immediately.
 
-### Note access rules
+## 3. API overview
 
-A note belongs to its owner and, optionally, to one team (`teamId` null = personal note).
-The rules are enforced in `NoteService`:
+All endpoints except registration use HTTP Basic. **[`requests.http`](requests.http)** has a
+runnable example for every endpoint, using alice/bob/carol to show the allowed, 403, 404
+and 409 cases. Run it top to bottom in IntelliJ's HTTP client.
 
-| Situation                                               | Result |
-|---------------------------------------------------------|--------|
-| Owner: read, edit, delete, move between their own teams | allowed |
-| Member of the note's team: read and edit                | allowed |
-| Member of the note's team: delete, or change `teamId`   | `403`  |
-| Anyone else (including a missing note id)               | `404` — existence of other users' notes is never revealed |
-| Assigning a note to a team you're not in (or that doesn't exist) | `400` on `teamId` |
+| Endpoint | Notes |
+|----------|-------|
+| `POST /auth/register` | Public. `{email, password}`; password 8–72 chars; `409` if taken |
+| `GET /auth/me` | The signed-in user's `{id, email}` |
+| `POST /notes` | `{title, content, teamId?}` → `201`; no `teamId` = personal |
+| `GET /notes?teamId=&q=` | Notes you can access, newest first; optional team filter and case-insensitive search |
+| `GET` / `PUT` / `DELETE /notes/{id}` | `PUT` replaces title, content **and** team; `DELETE` is owner-only → `204` |
+| `POST /teams` | `{name}` → `201`; you become creator and first member |
+| `GET /teams` | Your teams, each with members' `{id, email}` |
+| `POST /teams/{id}/members` | `{email}` → `201`; any member can add; `404` unknown email, `409` already a member |
+| `DELETE /teams/{id}/members/{userId}` | Leave yourself, or (creator only) remove others → `204`; creator can't be removed (`409`) |
 
-### Team membership rules
+Errors are JSON (`{status, error, message, fieldErrors}`). Validation failures return `400`
+with per-field messages.
 
-Teams are small and trusted, so any member can add people. Enforced in `TeamService`:
+## 4. Design decisions
 
-| Situation                                        | Result |
-|--------------------------------------------------|--------|
-| Any member adds an existing user                 | allowed |
-| A member removes themselves                      | allowed |
-| The creator removes another member               | allowed |
-| A non-creator removes someone else               | `403`  |
-| Anyone tries to remove the creator               | `409` (every team keeps at least its creator) |
-| Non-member, or a team id that doesn't exist      | `404` on every `/teams/{id}` endpoint |
+- **Package-by-layer** (`controller` → `service` → `repository` → `model`, plus `dto`,
+  `exception`, `config`). Controllers are thin delegators. All business rules and access
+  checks live in services, and only services touch repositories. Controllers return DTOs,
+  never entities.
+- **`schema.sql` is the source of truth.** Hibernate runs with `ddl-auto=validate`, so the app
+  refuses to start if entities drift from the schema. The DDL is idempotent and kept portable
+  between H2 and PostgreSQL. For example, `content` is `VARCHAR(20000)` rather than `TEXT`.
+- **HTTP Basic + BCrypt.** Stateless and deliberately minimal for the scope. CSRF is disabled
+  because credentials travel in a header, never a cookie. Unknown email and wrong password
+  give the same `401`.
+- **Access is derived from team membership at query time.** There are no per-note ACL rows:
+  the "can I see this note?" rule is part of the repository query (owner, or member of the
+  note's team). Removing a member therefore revokes access instantly, with nothing to clean
+  up.
+- **404 vs 403.** No access returns `404`, identical to a non-existent id, so note and team
+  ids can't be probed. `403` is used only when the caller can already see the resource but
+  isn't allowed the action (a member deleting or moving a note, a non-creator removing
+  someone).
+- **`PUT` replaces the whole note**, including `teamId`. Omitting it makes the note personal.
+  The UI therefore always sends the currently selected team, even when unchanged.
+- **Single-file UI.** `static/index.html` holds its HTML, CSS and JS inline. Only `GET /`
+  and `GET /index.html` are public in `SecurityConfig`, and `<script src>` / `<link href>`
+  requests can't carry the Authorization header. Separate asset files would have needed more
+  public paths. Credentials are kept in `sessionStorage` (per tab, cleared on sign-out) and
+  re-verified on load.
+- **XSS-safe rendering.** All API data is inserted with `textContent` / `createElement`,
+  never `innerHTML`, so note titles, content and team names can't inject markup or script.
 
-Note access is worked out from team membership on every request, so a removed member
-loses access to the team's notes immediately. Notes they own stay in the team, and they
-can still see those because they own them.
+## 5. Known limitations and what I'd do next
 
-### Example
+**Limitations today**
+- Registration is open to anyone. Adding a member by email reveals whether that email is
+  registered (`404`), as registration's `409` already does.
+- The database is in-memory H2: data is lost on restart. The H2 console (`/h2-console`) is
+  enabled for development.
+- Demo seeding is on by default (`app.demo-data.enabled`) and uses a published password.
+- Basic credentials sit in `sessionStorage` and are resent on every request; HTTPS is
+  assumed.
+- `GET /notes` and `GET /teams` return everything, with no paging.
 
-```bash
-curl -u alice@example.com:correct-horse -H 'Content-Type: application/json'      -d '{"title":"Sprint plan","content":"Ship notes API"}' http://localhost:8080/notes
-curl -u alice@example.com:correct-horse 'http://localhost:8080/notes?q=sprint'
-```
+**Next steps**
+1. **Admin- or invite-only registration.** Team invites instead of open sign-up, which also
+   closes the email-enumeration gap.
+2. **JWT or session-based auth** instead of Basic: short-lived tokens or an HttpOnly session
+   cookie (with CSRF protection), logout/revocation, ideally via an OIDC provider with MFA.
+3. **PostgreSQL + Flyway.** Versioned migrations replace `schema.sql`. Remove the H2 console
+   and disable demo seeding in production profiles.
+4. **Pagination** (and sorting) on note and team lists, plus full-text search instead of
+   `LIKE`.
+5. **Per-note sharing** with individual users and read-only vs edit permissions, alongside
+   team sharing.
 
-## Project structure
+## Repository
 
-Package-by-layer under `com.bluestaq.demo`:
-
-| Package      | Responsibility                                             |
-|--------------|------------------------------------------------------------|
-| `controller` | REST endpoints — thin delegators only                      |
-| `service`    | Business logic, authorization checks, transactions         |
-| `repository` | Spring Data repositories (used only by services)           |
-| `model`      | JPA entities                                               |
-| `dto`        | Request/response records and API error bodies              |
-| `exception`  | Custom exceptions and the global exception handler         |
-| `config`     | Security and other configuration                           |
-
-The browser UI is `src/main/resources/static/index.html`, served at `/`.
-
-Data model: `users`, `teams`, `team_members` (composite key) and `notes` (owner required,
-team optional).
-
-The database schema is owned by `src/main/resources/schema.sql`; Hibernate runs with
-`ddl-auto=validate`, so startup fails if the entities drift from the schema.
-
-## Security notes and trade-offs
-
-Authentication is deliberately minimal for this stage: stateless HTTP Basic with
-BCrypt-hashed passwords. CSRF protection is disabled because credentials travel in a
-header, not a cookie.
-
-In production this would be replaced with a proper identity provider (e.g. OAuth 2.0 /
-OpenID Connect, optionally with MFA/OTP), served over HTTPS only, and backed by a
-persistent database such as PostgreSQL. The H2 console at `/h2-console` is a development
-convenience and must be removed before any real deployment.
-
-## CI workflows
-
-GitHub Actions in [`.github/workflows`](.github/workflows):
-
-| Workflow | Trigger | What it does |
-|----------|---------|--------------|
-| Test Coverage Guard | push to `devel` | `mvn test` with JaCoCo; prints line coverage |
-| Dependency Security Scan | push to `devel` | OWASP dependency-check against the NVD database |
-| Code Review Agent | manual | Claude reviews recent commits against the Engineering Principles in `CLAUDE.md` and commits a report to `reports/` |
-| Auto-Implementer | called when the review finds HIGH issues | Claude fixes them on a `fix/auto-*` branch and opens a PR against `devel` for human review |
-
-Required repository secrets: `ANTHROPIC_API_KEY` and `NVD_API_KEY`.
-
-## Branches and versions
-
-- `devel` — active development; `staging` — tested, demo-ready; `master` — public (default).
-- The current version is in [`VERSION`](VERSION) (mirrored as `app.version` in
-  `application.properties`).
-
-## Change log
-
-Code changes are recorded in [`FIXES.md`](FIXES.md).
+- **Branches:** `devel` (active), `staging` (tested), `master` (public, default). The version
+  is in [`VERSION`](VERSION), mirrored as `app.version`.
+- **Change log:** every code change is recorded in [`FIXES.md`](FIXES.md).
+- **CI** ([`.github/workflows`](.github/workflows)): JaCoCo coverage and an OWASP dependency
+  scan on push to `devel`, plus an AI code-review agent whose HIGH findings trigger an
+  auto-fix PR for human review. The workflows need the `ANTHROPIC_API_KEY` and
+  `NVD_API_KEY` secrets.

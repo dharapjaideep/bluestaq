@@ -148,3 +148,8 @@
   `SecurityConfig` (protected) needs no new public paths for separate .js/.css files. All
   API data is rendered with `textContent` (no `innerHTML`), so note/team text can't inject HTML.
 - `README.md` — "Browser UI" section; status updated.
+
+## 2026-10-24 — README rewrite for reviewers
+- `README.md` — restructured: overview, running, demo credentials + walkthrough, API overview
+  (pointing to `requests.http`), design decisions, limitations and next steps. Removed
+  duplicated sections and an outdated curl example. No code changes.

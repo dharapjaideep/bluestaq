@@ -30,7 +30,7 @@ it on first run, which needs internet access.
 ./mvnw spring-boot:run      # Windows: mvnw.cmd spring-boot:run
 ```
 
-Open **<http://localhost:8080/>**. Run the tests (66 tests, MockMvc against the real security
+Open **<http://localhost:8080/>**. Run the tests (69 tests, MockMvc against the real security
 chain and an in-memory database):
 
 ```bash
@@ -87,12 +87,16 @@ with per-field messages.
 
 ## 6. Design choices I spent the most time on
 
-**Authentication.** I first explored Google OAuth and email OTP, then deliberately chose
-HTTP Basic with BCrypt-hashed passwords. It's stateless, needs no external provider setup for
-reviewers, and kept the time on the core features. CSRF is disabled because credentials
-travel in a header, never a cookie, and an unknown email gets the same `401` as a wrong
-password. The cost is that credentials go with every request. In production I'd use an OIDC
-provider issuing short-lived JWTs, or an HttpOnly session cookie with CSRF protection.
+**Authentication.** I considered Google OAuth and email OTP, and deliberately chose HTTP Basic
+with BCrypt-hashed passwords for this project. Both alternatives add third-party dependencies:
+OAuth needs a Google Cloud project and client credentials, and OTP needs an email provider to
+send the codes. Either would make the project harder for reviewers to run. Basic auth is
+stateless, works out of the box, and kept the time on the core features. CSRF is disabled
+because credentials travel in a header, never a cookie, and an unknown email gets the same
+`401` as a wrong password. The cost is that credentials go with every request. For a real
+product I'd move to production-grade auth: an OIDC provider (such as Google or a company
+identity provider) with MFA, issuing short-lived tokens that can be revoked, or an HttpOnly
+session cookie with CSRF protection.
 
 **Access model.** The alternative was per-note ACL rows (who can see which note), which would
 have to be kept in sync with team membership. Instead, access is worked out from membership
@@ -131,6 +135,9 @@ nothing is overwritten or lost.
   re-verified on load. Signing out also wipes the previous user's data from the page.
 - **XSS-safe rendering.** All API data is inserted with `textContent` / `createElement`,
   never `innerHTML`, so note titles, content and team names can't inject markup or script.
+- **No database console.** The H2 web console is turned off in `application.properties`, and
+  `SecurityConfig` has no public exception for it, so either control alone keeps it closed.
+  It logged in as `sa` with no password, which would have exposed every table.
 
 ## 8. Current limitations
 
@@ -138,7 +145,7 @@ nothing is overwritten or lost.
   registered (`404`), as registration's `409` already does.
 - The database is a local H2 file (`data/`). Changes to `schema.sql` only create missing
   tables, so after changing a table, delete `data/` (there are no migrations yet). The H2
-  console (`/h2-console`) is enabled for development.
+  web console is disabled, so there's no browser access to the database.
 - Demo seeding is on by default (`app.demo-data.enabled`) and uses a published password.
 - Basic credentials sit in `sessionStorage` and are resent on every request; HTTPS is
   assumed.
@@ -149,10 +156,11 @@ nothing is overwritten or lost.
 **Change**
 - **HTTP Basic → OIDC/JWT:** short-lived tokens (or an HttpOnly session cookie with CSRF
   protection), logout/revocation, ideally via an OIDC provider with MFA.
-- **H2 → PostgreSQL + Flyway:** versioned migrations replace `schema.sql`, the H2 console is
-  removed, and `data/` resets are no longer needed.
-- **Demo settings into a `demo` Spring profile:** seeding and the H2 console would only run
-  when that profile is active, never by default.
+- **H2 → PostgreSQL + Flyway:** versioned migrations replace `schema.sql`, and `data/` resets
+  are no longer needed.
+- **Demo settings into a `demo` Spring profile:** demo seeding (and, if wanted, the H2
+  console with a real database password) would only run when that profile is active, never
+  by default.
 
 **Add**
 - **Admin- or invite-only registration:** team invites instead of open sign-up, which also
@@ -167,6 +175,9 @@ nothing is overwritten or lost.
 - **Open self-registration:** anyone can create an account today.
 - **Sending credentials on every request:** a token or session would replace the Basic
   header.
+- **Front-loading authentication:** I spent some initial time exploring Google OAuth and email
+  OTP before any core feature existed. Next time I'd start with the simplest auth that's
+  secure enough, build the core, and revisit auth once the shape of the app is clear.
 
 ## 10. How I work with Claude Code
 
@@ -181,11 +192,12 @@ any new project, and it sets guidelines and guardrails for how the AI works in t
 - **[`PERSONAL-PREFERENCES.md`](PERSONAL-PREFERENCES.md):** my workflow conventions: the
   `devel` → `staging` → `master` branching strategy, version bumping, and post-merge checks.
 - **[`.claude/agents/`](.claude/agents):** two agents run by GitHub Actions. The code-review
-  agent is started manually (JaCoCo coverage and an OWASP dependency scan run separately on
-  every push to `devel`). It reviews the changes on `devel` for design and security issues
-  and writes a report with HIGH/MEDIUM/LOW findings. If there are HIGH findings, the
-  auto-implementer agent fixes them on a separate branch and opens a pull request for human
-  review. It never commits to `devel` directly.
+  agent reviews the changes on `devel` for design and security issues and writes a report
+  with HIGH/MEDIUM/LOW findings. If there are HIGH findings, the auto-implementer agent fixes
+  them on a separate branch and opens a pull request for human review. It never commits to
+  `devel` directly. In my usual setup the review runs automatically on every push to
+  `devel`; here it's set to a manual trigger because it needs the Claude GitHub App and the
+  `ANTHROPIC_API_KEY` secret configured. Switching to on-push is a one-line change.
 
 The project-specific parts (the project description, package structure, and schema rules)
 were written for this project. Several decisions in this README came out of that setup. For

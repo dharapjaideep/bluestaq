@@ -54,7 +54,7 @@ public class DemoDataService {
                 new Note("Bob's reading list", "Designing Data-Intensive Applications.", bob, null),
                 new Note("Carol's ideas", "Dark mode for the notes UI.", carol, null),
                 new Note("Sprint 12 plan", "Ship the notes API; start on team endpoints.", alice, engineering),
-                new Note("On-call runbook", "Restart the service, then check the H2 console.", alice, engineering)));
+                new Note("On-call runbook", "Restart the service, then check the logs.", alice, engineering)));
         return true;
     }
 

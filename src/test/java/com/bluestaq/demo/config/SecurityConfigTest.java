@@ -2,6 +2,7 @@ package com.bluestaq.demo.config;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -61,5 +62,26 @@ class SecurityConfigTest {
         mockMvc.perform(get("/auth/me").with(httpBasic("nobody@example.com", "wrong-password")))
                 .andExpect(status().isUnauthorized())
                 .andExpect(header().doesNotExist("WWW-Authenticate"));
+    }
+
+    @Test
+    void h2ConsoleIsNotPublic() throws Exception {
+        mockMvc.perform(get("/h2-console"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/h2-console/login.do"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void h2ConsoleIsDisabledEvenForSignedInUsers() throws Exception {
+        // Second control: even past the security rules, the console isn't served at all.
+        mockMvc.perform(get("/h2-console").with(user("someone@example.com")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void pagesCannotBeFramed() throws Exception {
+        mockMvc.perform(get("/index.html"))
+                .andExpect(header().string("X-Frame-Options", "DENY"));
     }
 }

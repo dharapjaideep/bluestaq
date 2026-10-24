@@ -44,19 +44,16 @@ public class SecurityConfig {
                         // Only GET of this one static page is public; it contains no data, and
                         // every API call it makes still goes through the rules here.
                         .requestMatchers(HttpMethod.GET, "/", "/index.html").permitAll()
-                        // Security: TEMPORARY - the H2 console is public for local development.
-                        // It has its own DB login, but must be removed before any real deployment.
-                        .requestMatchers("/h2-console/**").permitAll()
                         // Fail safe: anything not listed above requires an authenticated user.
                         .anyRequest().authenticated())
                 // Missing or wrong credentials get a plain 401: no redirect to a login page, and
                 // no "WWW-Authenticate: Basic" header. That header makes browsers pop up their
                 // own login dialog over the web UI; the page shows its own error instead.
                 // Clients that send credentials up front (curl -u, the web UI) are unaffected.
-                .httpBasic(basic -> basic.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
-                // Security: the H2 console renders in frames; allow framing by this origin only,
-                // which still blocks clickjacking from other sites.
-                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()));
+                .httpBasic(basic -> basic.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)));
+        // Security: framing stays at Spring Security's default (X-Frame-Options: DENY), which
+        // blocks clickjacking. Nothing in this app needs to be framed now that the H2 console,
+        // which rendered in frames, is disabled (see application.properties).
         return http.build();
     }
 

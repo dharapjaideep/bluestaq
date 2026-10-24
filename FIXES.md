@@ -207,3 +207,23 @@
   a concurrent-edit step; test count notes the in-memory test database; section 10's agent
   description corrected (JaCoCo/OWASP are separate workflows, not part of the review agent).
   No code changes.
+
+## 2026-10-24 — Disable the H2 web console
+- `src/main/java/com/bluestaq/demo/config/SecurityConfig.java` (protected — diff approved by user)
+  — removed the public `/h2-console/**` exception and the `sameOrigin` framing override; framing
+  is back to Spring Security's default `X-Frame-Options: DENY`.
+- `src/main/resources/application.properties` — `spring.h2.console.enabled=false`. The console
+  logged in as `sa` with an empty password, exposing every table (incl. password hashes) to
+  anyone who could reach it. Two independent controls (defence in depth).
+- `service/DemoDataService.java` — seeded runbook note no longer tells users to "check the H2
+  console".
+- `SecurityConfigTest.java` — `/h2-console` is 401 without auth, 404 when signed in (not
+  served), and pages carry `X-Frame-Options: DENY`.
+- `README.md` — limitations / "If I had more time" lines updated, design-decisions bullet, test
+  count (69).
+
+## 2026-10-24 — README: authentication rationale, "front-loading auth", agent trigger
+- `README.md` — section 6 "Authentication" now explains why OAuth/OTP were not chosen (third-party
+  setup for reviewers) and states the production-grade auth target; section 9 "Stop doing" adds
+  "Front-loading authentication"; section 10 explains why the review agent is manual here and
+  on-push in the usual setup. No code changes.

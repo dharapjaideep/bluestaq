@@ -3,124 +3,268 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Demo — Sign in</title>
+  <title>Notes</title>
   <!-- Empty icon so the browser does not request /favicon.ico (which would get a 401). -->
   <link rel="icon" href="data:,">
+  <!--
+    Single self-contained page: CSS and JS are inline on purpose. SecurityConfig makes only
+    GET / and GET /index.html public, and <script src>/<link href> requests cannot carry the
+    Authorization header, so separate .js/.css files would need extra public paths there.
+  -->
   <style>
     :root {
       --bg: #f4f5f7; --card: #ffffff; --text: #1d2330; --muted: #5d6573;
-      --border: #d5d9e0; --accent: #2f5bd3; --accent-hover: #2349b0;
+      --border: #d5d9e0; --accent: #2f5bd3; --accent-hover: #2349b0; --accent-soft: #e7edfc;
       --error-bg: #fdecec; --error-text: #a3221d; --ok-bg: #e8f5ec; --ok-text: #1d6b35;
+      --danger: #c0352f;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #14171c; --card: #1e232b; --text: #e6e9ee; --muted: #9aa3b0;
-        --border: #343b46; --accent: #6d8ff0; --accent-hover: #8aa6f5;
+        --border: #343b46; --accent: #6d8ff0; --accent-hover: #8aa6f5; --accent-soft: #263150;
         --error-bg: #3a1d1d; --error-text: #f1a7a3; --ok-bg: #1b3324; --ok-text: #9fdcb2;
+        --danger: #f07c76;
       }
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 16px; background: var(--bg); color: var(--text);
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
       font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     }
+    [hidden] { display: none !important; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    h2 { font-size: 17px; margin: 0 0 12px; }
+    h3 { font-size: 15px; margin: 0; }
+    .sub, .muted { color: var(--muted); }
+    .sub { margin: 0 0 20px; }
+    label { display: block; font-weight: 600; margin: 14px 0 4px; }
+    input, select, textarea {
+      width: 100%; padding: 9px 11px; font: inherit; color: var(--text); background: var(--bg);
+      border: 1px solid var(--border); border-radius: 6px;
+    }
+    textarea { min-height: 260px; resize: vertical; }
+    input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    select:disabled { opacity: 0.7; }
+    button {
+      padding: 9px 14px; font: inherit; font-weight: 600; color: #fff; background: var(--accent);
+      border: 1px solid transparent; border-radius: 6px; cursor: pointer; white-space: nowrap;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: 0.6; cursor: default; }
+    button.secondary { color: var(--text); background: transparent; border-color: var(--border); }
+    button.secondary:hover { background: var(--bg); }
+    button.danger { color: var(--danger); background: transparent; border-color: var(--danger); }
+    button.danger:hover { background: var(--error-bg); }
+    button.small { padding: 4px 10px; font-size: 13px; }
+    a.link { color: var(--accent); font-weight: 600; cursor: pointer; }
+    .field-error { color: var(--error-text); font-size: 13px; margin-top: 3px; }
+    .msg { border-radius: 6px; padding: 9px 11px; margin: 0 0 12px; }
+    .msg.error { background: var(--error-bg); color: var(--error-text); }
+    .msg.ok { background: var(--ok-bg); color: var(--ok-text); }
+
+    /* ---- Sign in / register ---- */
+    .auth-shell { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
     .card {
       width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--border);
       border-radius: 10px; padding: 28px;
     }
-    h1 { font-size: 22px; margin: 0 0 4px; }
-    .sub { color: var(--muted); margin: 0 0 20px; }
-    label { display: block; font-weight: 600; margin: 14px 0 4px; }
-    input {
-      width: 100%; padding: 9px 11px; font: inherit; color: var(--text); background: var(--bg);
-      border: 1px solid var(--border); border-radius: 6px;
-    }
-    input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-    .field-error { color: var(--error-text); font-size: 13px; margin-top: 3px; min-height: 0; }
-    button {
-      width: 100%; margin-top: 20px; padding: 10px; font: inherit; font-weight: 600; color: #fff;
-      background: var(--accent); border: 0; border-radius: 6px; cursor: pointer;
-    }
-    button:hover { background: var(--accent-hover); }
-    button:disabled { opacity: 0.6; cursor: default; }
+    .card form button { width: 100%; margin-top: 20px; }
     .switch { text-align: center; margin: 18px 0 0; color: var(--muted); }
-    .switch a { color: var(--accent); font-weight: 600; cursor: pointer; }
-    .msg { border-radius: 6px; padding: 9px 11px; margin-bottom: 4px; }
-    .msg.error { background: var(--error-bg); color: var(--error-text); }
-    .msg.ok { background: var(--ok-bg); color: var(--ok-text); }
-    dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 16px 0 0; }
-    dt { color: var(--muted); }
-    dd { margin: 0; font-weight: 600; word-break: break-all; }
-    [hidden] { display: none !important; }
+    .demo-hint { font-size: 13px; color: var(--muted); margin: 14px 0 0; text-align: center; }
+
+    /* ---- App layout ---- */
+    .topbar {
+      display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+      background: var(--card); border-bottom: 1px solid var(--border);
+    }
+    .topbar .brand { font-weight: 700; font-size: 17px; margin-right: auto; }
+    .topbar .who { color: var(--muted); font-size: 14px; overflow: hidden; text-overflow: ellipsis; }
+    .layout {
+      display: grid; grid-template-columns: 200px 320px 1fr; gap: 16px; padding: 16px;
+      max-width: 1400px; margin: 0 auto;
+    }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; min-width: 0; }
+    .sidebar nav { display: flex; flex-direction: column; gap: 2px; }
+    .sidebar .group-label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 4px; }
+    .nav-item {
+      text-align: left; color: var(--text); background: transparent; font-weight: 500;
+      padding: 7px 10px; border-radius: 6px; overflow: hidden; text-overflow: ellipsis;
+    }
+    .nav-item:hover { background: var(--bg); }
+    .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .sidebar .manage { width: 100%; margin-top: 16px; }
+
+    .list-head { display: flex; gap: 8px; margin-bottom: 12px; }
+    .note-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .note-item {
+      width: 100%; text-align: left; color: var(--text); background: transparent; font-weight: 400;
+      border: 1px solid var(--border); padding: 10px 12px;
+    }
+    .note-item:hover { background: var(--bg); }
+    .note-item.active { border-color: var(--accent); background: var(--accent-soft); }
+    .note-item .title { font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; }
+    .note-item .meta { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+    .badge { font-size: 12px; padding: 1px 7px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); }
+    .empty { color: var(--muted); text-align: center; padding: 24px 8px; }
+
+    .editor-meta { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+    .actions { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+    .actions .spacer { flex: 1; }
+
+    .team-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 12px; }
+    .team-card .head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .members { list-style: none; padding: 0; margin: 10px 0; }
+    .members li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid var(--border); }
+    .members li:first-child { border-top: 0; }
+    .members .email { overflow: hidden; text-overflow: ellipsis; }
+    .inline-form { display: flex; gap: 8px; }
+    .inline-form input { flex: 1; min-width: 0; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-<main class="card">
 
-  <!-- Sign in -->
-  <section id="login-view">
-    <h1>Sign in</h1>
-    <p class="sub">Use your email and password.</p>
-    <div id="login-msg" class="msg" hidden></div>
-    <form id="login-form" novalidate>
-      <label for="login-email">Email</label>
-      <input id="login-email" type="email" autocomplete="username" required>
-      <label for="login-password">Password</label>
-      <input id="login-password" type="password" autocomplete="current-password" required>
-      <button type="submit">Sign in</button>
-    </form>
-    <p class="switch">No account yet? <a id="to-register">Register account</a></p>
-  </section>
+<!-- ================= Sign in / register ================= -->
+<div id="auth-shell" class="auth-shell">
+  <main class="card">
+    <section id="login-view">
+      <h1>Sign in</h1>
+      <p class="sub">Use your email and password.</p>
+      <div id="login-msg" class="msg" hidden></div>
+      <form id="login-form" novalidate>
+        <label for="login-email">Email</label>
+        <input id="login-email" type="email" autocomplete="username" required>
+        <label for="login-password">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" required>
+        <button type="submit">Sign in</button>
+      </form>
+      <p class="switch">No account yet? <a id="to-register" class="link">Register account</a></p>
+      <p class="demo-hint">Demo: alice@demo.com / password123</p>
+    </section>
 
-  <!-- Register -->
-  <section id="register-view" hidden>
-    <h1>Register account</h1>
-    <p class="sub">Password must be 8–72 characters.</p>
-    <div id="register-msg" class="msg" hidden></div>
-    <form id="register-form" novalidate>
-      <label for="register-email">Email</label>
-      <input id="register-email" type="email" autocomplete="username" required>
-      <div id="register-email-error" class="field-error"></div>
-      <label for="register-password">Password</label>
-      <input id="register-password" type="password" autocomplete="new-password" required>
-      <div id="register-password-error" class="field-error"></div>
-      <button type="submit">Create account</button>
-    </form>
-    <p class="switch">Already registered? <a id="to-login">Sign in</a></p>
-  </section>
+    <section id="register-view" hidden>
+      <h1>Register account</h1>
+      <p class="sub">Password must be 8–72 characters.</p>
+      <div id="register-msg" class="msg" hidden></div>
+      <form id="register-form" novalidate>
+        <label for="register-email">Email</label>
+        <input id="register-email" type="email" autocomplete="username" required>
+        <div id="register-email-error" class="field-error"></div>
+        <label for="register-password">Password</label>
+        <input id="register-password" type="password" autocomplete="new-password" required>
+        <div id="register-password-error" class="field-error"></div>
+        <button type="submit">Create account</button>
+      </form>
+      <p class="switch">Already registered? <a id="to-login" class="link">Sign in</a></p>
+    </section>
+  </main>
+</div>
 
-  <!-- Signed in -->
-  <section id="home-view" hidden>
-    <h1>You're signed in</h1>
-    <p class="sub">Credentials checked with <code>GET /auth/me</code>.</p>
-    <dl>
-      <dt>User ID</dt><dd id="home-id"></dd>
-      <dt>Email</dt><dd id="home-email"></dd>
-    </dl>
-    <button id="sign-out" type="button">Sign out</button>
-  </section>
+<!-- ================= Signed-in app ================= -->
+<div id="app" hidden>
+  <header class="topbar">
+    <span class="brand">Notes</span>
+    <span id="who" class="who"></span>
+    <button id="sign-out" class="secondary small" type="button">Sign out</button>
+  </header>
 
-</main>
+  <div class="layout">
+    <!-- Filters -->
+    <aside class="panel sidebar">
+      <nav id="filters" aria-label="Note filters"></nav>
+      <button id="open-teams" class="secondary manage" type="button">Manage teams</button>
+    </aside>
+
+    <!-- Notes list -->
+    <section class="panel">
+      <div class="list-head">
+        <input id="search" type="search" placeholder="Search notes…" aria-label="Search notes">
+        <button id="new-note" type="button">New</button>
+      </div>
+      <div id="list-msg" class="msg" hidden></div>
+      <ul id="note-list" class="note-list"></ul>
+    </section>
+
+    <!-- Right-hand panel: editor or teams -->
+    <section class="panel">
+      <div id="placeholder" class="empty">Select a note, or create a new one.</div>
+
+      <div id="editor" hidden>
+        <h2 id="editor-heading">New note</h2>
+        <div id="editor-msg" class="msg" hidden></div>
+        <form id="editor-form" novalidate>
+          <label for="note-title">Title</label>
+          <input id="note-title" maxlength="255" required>
+          <div id="note-title-error" class="field-error"></div>
+          <label for="note-team">Shared with</label>
+          <select id="note-team"></select>
+          <div id="note-team-error" class="field-error"></div>
+          <label for="note-content">Content</label>
+          <textarea id="note-content" maxlength="20000"></textarea>
+          <div id="note-content-error" class="field-error"></div>
+          <p id="editor-meta" class="editor-meta"></p>
+          <div class="actions">
+            <button id="save-note" type="submit">Save</button>
+            <button id="cancel-edit" class="secondary" type="button">Close</button>
+            <span class="spacer"></span>
+            <button id="delete-note" class="danger" type="button">Delete</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="teams-panel" hidden>
+        <h2>Teams</h2>
+        <div id="teams-msg" class="msg" hidden></div>
+        <form id="create-team-form" class="inline-form" novalidate>
+          <input id="new-team-name" maxlength="100" placeholder="New team name" aria-label="New team name">
+          <button type="submit">Create team</button>
+        </form>
+        <div id="new-team-error" class="field-error"></div>
+        <div id="team-cards"></div>
+      </div>
+    </section>
+  </div>
+</div>
 
 <script>
-  // Credentials are kept in memory only (never localStorage), so a page reload signs the
-  // user out. HTTP Basic sends them on every request; the API keeps no session.
-  let authHeader = null;
+  // ---------------------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------------------
+  // Security: credentials live in sessionStorage (this tab only, cleared on sign-out and when
+  // the tab closes) rather than localStorage, so they don't persist across browser sessions.
+  // HTTP Basic sends them on every request; the API keeps no server-side session.
+  const AUTH_KEY = 'notes.auth';
+  const state = {
+    auth: null,        // { header, me: { id, email } }
+    teams: [],         // GET /teams
+    notes: [],         // GET /notes (current search / team filter)
+    filter: 'all',     // 'all' | 'personal' | team id (number)
+    query: '',
+    selectedId: null,  // note open in the editor; null for a new note
+  };
 
   const $ = (id) => document.getElementById(id);
 
-  function show(view) {
-    for (const v of ['login-view', 'register-view', 'home-view']) $(v).hidden = v !== view;
-    const focus = { 'login-view': 'login-email', 'register-view': 'register-email' }[view];
-    if (focus) $(focus).focus();
+  /** Creates an element; children are strings (set as text, never parsed as HTML) or nodes. */
+  function el(tag, props = {}, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(props)) {
+      if (key.startsWith('on')) node.addEventListener(key.slice(2), value);
+      else if (key === 'class') node.className = value;
+      else node[key] = value;
+    }
+    for (const child of children) if (child != null) node.append(child);
+    return node;
   }
 
-  function setMsg(id, text, kind) {
-    const el = $(id);
-    el.textContent = text || '';
-    el.className = 'msg ' + (kind || 'error');
-    el.hidden = !text;
+  function setMsg(id, text, kind = 'error') {
+    const box = $(id);
+    box.textContent = text || '';
+    box.className = 'msg ' + kind;
+    box.hidden = !text;
   }
 
   // btoa() only handles Latin-1; encode as UTF-8 first so non-ASCII passwords work.
@@ -129,19 +273,87 @@
     return 'Basic ' + btoa(String.fromCharCode(...bytes));
   }
 
-  async function readJson(res) {
-    try { return await res.json(); } catch { return null; }
+  // ---------------------------------------------------------------------------------------
+  // API
+  // ---------------------------------------------------------------------------------------
+  class ApiError extends Error {
+    constructor(status, body) {
+      super(describeError(status, body));
+      this.status = status;
+      this.fieldErrors = (body && body.fieldErrors) || {};
+    }
   }
 
-  async function withBusy(form, fn) {
-    const btn = form.querySelector('button');
-    btn.disabled = true;
-    try { await fn(); }
-    catch { return 'Could not reach the server. Is it running?'; }
-    finally { btn.disabled = false; }
+  /** Turns an error response into a sentence a user can act on. */
+  function describeError(status, body) {
+    const message = body && body.message;
+    switch (status) {
+      case 0: return 'Could not reach the server. Is it running?';
+      case 400: {
+        const fields = Object.entries((body && body.fieldErrors) || {});
+        return fields.length
+          ? fields.map(([field, text]) => `${field}: ${text}`).join('; ')
+          : message || 'The request was not valid.';
+      }
+      case 403: return message || "You don't have permission to do that.";
+      // "Note not found" / "Team not found" get a hint; other 404s (e.g. an unknown email
+      // when adding a member) already say what's wrong.
+      case 404: return !message ? 'Not found.'
+        : /not found$/i.test(message) ? `${message}. It may have been deleted, or you no longer have access.`
+        : message;
+      case 409: return message || 'That conflicts with the current state.';
+      default: return message || `Unexpected error (${status}).`;
+    }
   }
 
-  // ---- Sign in ----
+  /**
+   * Calls the API with the stored credentials. Throws ApiError on any non-2xx status; on 401
+   * the stored credentials are no longer valid, so the user is sent back to sign in.
+   */
+  async function api(method, path, body) {
+    let res;
+    try {
+      res = await fetch(path, {
+        method,
+        headers: {
+          Authorization: state.auth.header,
+          ...(body !== undefined && { 'Content-Type': 'application/json' }),
+        },
+        // Security: 'omit' so the browser never adds credentials of its own; only the header
+        // above authenticates the request.
+        credentials: 'omit',
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch {
+      throw new ApiError(0, null);
+    }
+    if (res.status === 401) {
+      signOut('Your session has expired. Please sign in again.');
+      throw new ApiError(401, { message: 'Not signed in' });
+    }
+    const data = res.status === 204 ? null : await res.json().catch(() => null);
+    if (!res.ok) throw new ApiError(res.status, data);
+    return data;
+  }
+
+  /** Disables a form's buttons while an async action runs. */
+  async function busy(form, fn) {
+    const buttons = form.querySelectorAll('button');
+    buttons.forEach((b) => (b.disabled = true));
+    try { return await fn(); } finally { buttons.forEach((b) => (b.disabled = false)); }
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Sign in, register, sign out
+  // ---------------------------------------------------------------------------------------
+  function showAuth(view) {
+    $('app').hidden = true;
+    $('auth-shell').hidden = false;
+    $('login-view').hidden = view !== 'login';
+    $('register-view').hidden = view !== 'register';
+    $(view === 'login' ? 'login-email' : 'register-email').focus();
+  }
+
   $('login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     setMsg('login-msg', '');
@@ -149,27 +361,21 @@
     const password = $('login-password').value;
     if (!email || !password) return setMsg('login-msg', 'Enter your email and password.');
 
-    const err = await withBusy(e.target, async () => {
+    await busy(e.target, async () => {
       const header = basicAuth(email, password);
-      // credentials: 'omit' so the browser never adds cached credentials of its own.
-      const res = await fetch('/auth/me', { headers: { Authorization: header }, credentials: 'omit' });
-      if (res.ok) {
-        const user = await res.json();
-        authHeader = header;
-        $('home-id').textContent = user.id;
-        $('home-email').textContent = user.email;
-        $('login-password').value = '';
-        show('home-view');
-      } else if (res.status === 401) {
-        setMsg('login-msg', 'Wrong email or password.');
-      } else {
-        setMsg('login-msg', 'Unexpected error (' + res.status + ').');
+      let res;
+      try {
+        res = await fetch('/auth/me', { headers: { Authorization: header }, credentials: 'omit' });
+      } catch {
+        return setMsg('login-msg', describeError(0));
       }
+      if (res.status === 401) return setMsg('login-msg', 'Wrong email or password.');
+      if (!res.ok) return setMsg('login-msg', describeError(res.status, await res.json().catch(() => null)));
+      $('login-password').value = '';
+      await startApp({ header, me: await res.json() });
     });
-    if (err) setMsg('login-msg', err);
   });
 
-  // ---- Register ----
   $('register-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     setMsg('register-msg', '');
@@ -178,20 +384,25 @@
     const email = $('register-email').value.trim();
     const password = $('register-password').value;
 
-    const err = await withBusy(e.target, async () => {
-      const res = await fetch('/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'omit',
-        body: JSON.stringify({ email, password }),
-      });
-      const body = await readJson(res);
+    await busy(e.target, async () => {
+      let res;
+      try {
+        res = await fetch('/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'omit',
+          body: JSON.stringify({ email, password }),
+        });
+      } catch {
+        return setMsg('register-msg', describeError(0));
+      }
+      const body = await res.json().catch(() => null);
       if (res.status === 201) {
         // Go to sign-in with the email filled in, so the user can log in straight away.
         $('register-form').reset();
         $('login-email').value = body.email;
-        show('login-view');
-        setMsg('login-msg', 'Account created for ' + body.email + '. Sign in below.', 'ok');
+        showAuth('login');
+        setMsg('login-msg', `Account created for ${body.email}. Sign in below.`, 'ok');
         $('login-password').focus();
       } else if (res.status === 400 && body && body.fieldErrors) {
         $('register-email-error').textContent = body.fieldErrors.email || '';
@@ -200,20 +411,406 @@
       } else if (res.status === 409) {
         setMsg('register-msg', 'That email is already registered.');
       } else {
-        setMsg('register-msg', (body && body.message) || 'Unexpected error (' + res.status + ').');
+        setMsg('register-msg', describeError(res.status, body));
       }
     });
-    if (err) setMsg('register-msg', err);
   });
 
-  // ---- Navigation ----
-  $('to-register').addEventListener('click', () => { setMsg('register-msg', ''); show('register-view'); });
-  $('to-login').addEventListener('click', () => { setMsg('login-msg', ''); show('login-view'); });
-  $('sign-out').addEventListener('click', () => {
-    authHeader = null;
-    setMsg('login-msg', 'Signed out.', 'ok');
-    show('login-view');
+  $('to-register').addEventListener('click', () => { setMsg('register-msg', ''); showAuth('register'); });
+  $('to-login').addEventListener('click', () => { setMsg('login-msg', ''); showAuth('login'); });
+  $('sign-out').addEventListener('click', () => signOut('Signed out.', 'ok'));
+
+  function signOut(message, kind = 'error') {
+    state.auth = null;
+    try { sessionStorage.removeItem(AUTH_KEY); } catch { /* storage unavailable */ }
+    setMsg('login-msg', message, kind);
+    showAuth('login');
+  }
+
+  async function startApp(auth) {
+    state.auth = auth;
+    try { sessionStorage.setItem(AUTH_KEY, JSON.stringify(auth)); } catch { /* storage unavailable */ }
+    Object.assign(state, { filter: 'all', query: '', selectedId: null });
+    $('search').value = '';
+    $('who').textContent = auth.me.email;
+    $('auth-shell').hidden = true;
+    $('app').hidden = false;
+    showRightPanel('placeholder');
+    try {
+      await loadTeams();
+      await loadNotes();
+    } catch (err) {
+      if (err.status !== 401) setMsg('list-msg', err.message);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Teams data and sidebar filters
+  // ---------------------------------------------------------------------------------------
+  async function loadTeams() {
+    state.teams = await api('GET', '/teams');
+    // A filter on a team the user has just left would show nothing; fall back to "All".
+    if (typeof state.filter === 'number' && !state.teams.some((t) => t.id === state.filter)) {
+      state.filter = 'all';
+    }
+    renderFilters();
+  }
+
+  function teamName(teamId) {
+    const team = state.teams.find((t) => t.id === teamId);
+    return team ? team.name : `Team #${teamId}`;
+  }
+
+  /** Looks up an email via the members of my teams; the notes API only returns owner ids. */
+  function userLabel(userId) {
+    if (userId === state.auth.me.id) return 'you';
+    for (const team of state.teams) {
+      const member = team.members.find((m) => m.id === userId);
+      if (member) return member.email;
+    }
+    return `user #${userId}`;
+  }
+
+  function renderFilters() {
+    const item = (label, value) => el('button', {
+      type: 'button',
+      class: 'nav-item' + (state.filter === value ? ' active' : ''),
+      title: label,
+      onclick: () => { state.filter = value; renderFilters(); loadNotes().catch(showListError); },
+    }, label);
+
+    $('filters').replaceChildren(
+      item('All notes', 'all'),
+      item('Personal', 'personal'),
+      el('div', { class: 'group-label' }, 'Teams'),
+      ...(state.teams.length
+        ? state.teams.map((t) => item(t.name, t.id))
+        : [el('div', { class: 'muted', style: 'font-size:13px;padding:0 10px' }, 'No teams yet')]),
+    );
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Notes list
+  // ---------------------------------------------------------------------------------------
+  async function loadNotes() {
+    const params = new URLSearchParams();
+    if (state.query) params.set('q', state.query);
+    if (typeof state.filter === 'number') params.set('teamId', state.filter);
+    const notes = await api('GET', '/notes' + (params.toString() ? '?' + params : ''));
+    // The API has no "personal only" filter, so that one is applied here.
+    state.notes = state.filter === 'personal' ? notes.filter((n) => n.teamId === null) : notes;
+    setMsg('list-msg', '');
+    renderNotes();
+  }
+
+  function showListError(err) {
+    if (err.status !== 401) setMsg('list-msg', err.message);
+  }
+
+  function formatTime(iso) {
+    return new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  }
+
+  function renderNotes() {
+    const list = $('note-list');
+    if (!state.notes.length) {
+      list.replaceChildren(el('li', { class: 'empty' }, state.query ? 'No notes match your search.' : 'No notes here yet.'));
+      return;
+    }
+    list.replaceChildren(...state.notes.map((note) => el('li', {},
+      el('button', {
+        type: 'button',
+        class: 'note-item' + (note.id === state.selectedId ? ' active' : ''),
+        onclick: () => openNote(note.id),
+      },
+        el('span', { class: 'title' }, note.title),
+        el('span', { class: 'meta' },
+          el('span', { class: 'badge' }, note.teamId === null ? 'Personal' : teamName(note.teamId)),
+          el('span', {}, formatTime(note.updatedAt))),
+      ),
+    )));
+  }
+
+  // Debounced so typing doesn't send a request per keystroke.
+  let searchTimer;
+  $('search').addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+      state.query = $('search').value.trim();
+      loadNotes().catch(showListError);
+    }, 250);
   });
+
+  // ---------------------------------------------------------------------------------------
+  // Note editor
+  // ---------------------------------------------------------------------------------------
+  let confirmingDelete = false;
+
+  function showRightPanel(which) {
+    $('placeholder').hidden = which !== 'placeholder';
+    $('editor').hidden = which !== 'editor';
+    $('teams-panel').hidden = which !== 'teams';
+  }
+
+  function clearEditorErrors() {
+    setMsg('editor-msg', '');
+    for (const f of ['title', 'team', 'content']) $(`note-${f}-error`).textContent = '';
+  }
+
+  function resetDeleteButton() {
+    confirmingDelete = false;
+    $('delete-note').textContent = 'Delete';
+  }
+
+  /** Fills the team dropdown: Personal + my teams, plus the note's own team if I'm not in it. */
+  function fillTeamSelect(currentTeamId) {
+    const options = [el('option', { value: '' }, 'Personal (only me)')];
+    for (const team of state.teams) options.push(el('option', { value: String(team.id) }, team.name));
+    // An owner who has left a team still owns notes in it; keep that team selectable so
+    // saving doesn't silently move the note.
+    if (currentTeamId !== null && !state.teams.some((t) => t.id === currentTeamId)) {
+      options.push(el('option', { value: String(currentTeamId) }, teamName(currentTeamId)));
+    }
+    $('note-team').replaceChildren(...options);
+    $('note-team').value = currentTeamId === null ? '' : String(currentTeamId);
+  }
+
+  function newNote() {
+    state.selectedId = null;
+    renderNotes();
+    clearEditorErrors();
+    resetDeleteButton();
+    $('editor-heading').textContent = 'New note';
+    $('note-title').value = '';
+    $('note-content').value = '';
+    // Pre-select the team being viewed, so "New" inside a team filter creates a team note.
+    fillTeamSelect(typeof state.filter === 'number' ? state.filter : null);
+    $('note-team').disabled = false;
+    $('delete-note').hidden = true;
+    $('editor-meta').textContent = '';
+    showRightPanel('editor');
+    $('note-title').focus();
+  }
+
+  async function openNote(id) {
+    clearEditorErrors();
+    resetDeleteButton();
+    try {
+      const note = await api('GET', `/notes/${id}`);
+      state.selectedId = note.id;
+      renderNotes();
+      showNoteInEditor(note);
+    } catch (err) {
+      if (err.status === 401) return;
+      showRightPanel('editor');
+      setMsg('editor-msg', err.message);
+      if (err.status === 404) await loadNotes().catch(showListError);
+    }
+  }
+
+  function showNoteInEditor(note) {
+    const isOwner = note.ownerId === state.auth.me.id;
+    $('editor-heading').textContent = 'Edit note';
+    $('note-title').value = note.title;
+    $('note-content').value = note.content || '';
+    fillTeamSelect(note.teamId);
+    // Only the owner can move a note or delete it; the server enforces this too (403).
+    $('note-team').disabled = !isOwner;
+    $('delete-note').hidden = !isOwner;
+    $('editor-meta').textContent =
+      `Owner: ${userLabel(note.ownerId)} · Created ${formatTime(note.createdAt)} · Updated ${formatTime(note.updatedAt)}`
+      + (isOwner ? '' : ' · Only the owner can delete this note or change its team.');
+    showRightPanel('editor');
+  }
+
+  $('new-note').addEventListener('click', newNote);
+  $('cancel-edit').addEventListener('click', () => {
+    state.selectedId = null;
+    renderNotes();
+    showRightPanel('placeholder');
+  });
+
+  $('editor-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearEditorErrors();
+    const teamValue = $('note-team').value;
+    // Always send the selected team, even when unchanged: PUT replaces the whole note, so a
+    // missing teamId would turn a team note into a personal one. For non-owners the dropdown
+    // is disabled but still holds the note's current team.
+    const body = {
+      title: $('note-title').value,
+      content: $('note-content').value,
+      teamId: teamValue === '' ? null : Number(teamValue),
+    };
+    await busy(e.target, async () => {
+      try {
+        const isNew = state.selectedId === null;
+        const note = isNew
+          ? await api('POST', '/notes', body)
+          : await api('PUT', `/notes/${state.selectedId}`, body);
+        state.selectedId = note.id;
+        await loadNotes();
+        showNoteInEditor(note);
+        setMsg('editor-msg', isNew ? 'Note created.' : 'Saved.', 'ok');
+      } catch (err) {
+        if (err.status === 401) return;
+        for (const [field, text] of Object.entries(err.fieldErrors)) {
+          const fieldId = field === 'teamId' ? 'team' : field;
+          if ($(`note-${fieldId}-error`)) $(`note-${fieldId}-error`).textContent = text;
+        }
+        setMsg('editor-msg', err.message);
+      }
+    });
+  });
+
+  // Two-step delete instead of a confirm() dialog: the first click arms the button.
+  $('delete-note').addEventListener('click', async () => {
+    if (!confirmingDelete) {
+      confirmingDelete = true;
+      $('delete-note').textContent = 'Click again to delete';
+      return;
+    }
+    resetDeleteButton();
+    try {
+      await api('DELETE', `/notes/${state.selectedId}`);
+      state.selectedId = null;
+      await loadNotes();
+      showRightPanel('placeholder');
+    } catch (err) {
+      if (err.status !== 401) setMsg('editor-msg', err.message);
+    }
+  });
+
+  // ---------------------------------------------------------------------------------------
+  // Teams panel
+  // ---------------------------------------------------------------------------------------
+  function openTeams() {
+    state.selectedId = null;
+    renderNotes();
+    setMsg('teams-msg', '');
+    $('new-team-error').textContent = '';
+    renderTeamCards();
+    showRightPanel('teams');
+  }
+
+  $('open-teams').addEventListener('click', openTeams);
+
+  $('create-team-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    setMsg('teams-msg', '');
+    $('new-team-error').textContent = '';
+    await busy(e.target, async () => {
+      try {
+        const team = await api('POST', '/teams', { name: $('new-team-name').value });
+        $('new-team-name').value = '';
+        await loadTeams();
+        renderTeamCards();
+        setMsg('teams-msg', `Team "${team.name}" created.`, 'ok');
+      } catch (err) {
+        if (err.status === 401) return;
+        $('new-team-error').textContent = err.fieldErrors.name || '';
+        if (!err.fieldErrors.name) setMsg('teams-msg', err.message);
+      }
+    });
+  });
+
+  /**
+   * Mirrors the server's rule so the button only appears where removal is allowed: anyone can
+   * leave (except the creator); only the creator can remove others; nobody removes the creator.
+   */
+  function canRemove(team, member) {
+    if (member.id === team.createdById) return false;
+    return member.id === state.auth.me.id || state.auth.me.id === team.createdById;
+  }
+
+  function renderTeamCards() {
+    if (!state.teams.length) {
+      $('team-cards').replaceChildren(el('p', { class: 'empty' }, "You're not in any teams yet. Create one above."));
+      return;
+    }
+    $('team-cards').replaceChildren(...state.teams.map(teamCard));
+  }
+
+  function teamCard(team) {
+    const msg = el('div', { class: 'msg', hidden: true });
+    const showMsg = (text, kind = 'error') => {
+      msg.textContent = text; msg.className = 'msg ' + kind; msg.hidden = !text;
+    };
+    const emailInput = el('input', { type: 'email', placeholder: 'Add member by email' });
+    emailInput.setAttribute('aria-label', `Add a member to ${team.name}`);
+
+    const addForm = el('form', {
+      class: 'inline-form',
+      noValidate: true,
+      onsubmit: async (e) => {
+        e.preventDefault();
+        showMsg('');
+        setMsg('teams-msg', '');
+        await busy(addForm, async () => {
+          try {
+            await api('POST', `/teams/${team.id}/members`, { email: emailInput.value.trim() });
+            await loadTeams();
+            renderTeamCards();
+            setMsg('teams-msg', `Added ${emailInput.value.trim()} to ${team.name}.`, 'ok');
+          } catch (err) {
+            if (err.status !== 401) showMsg(err.message);
+          }
+        });
+      },
+    }, emailInput, el('button', { type: 'submit', class: 'small' }, 'Add'));
+
+    const members = el('ul', { class: 'members' }, ...team.members.map((member) => el('li', {},
+      el('span', { class: 'email' },
+        member.email,
+        member.id === team.createdById ? el('span', { class: 'muted' }, ' · creator') : null,
+        member.id === state.auth.me.id ? el('span', { class: 'muted' }, ' · you') : null),
+      canRemove(team, member)
+        ? el('button', {
+            type: 'button',
+            class: 'danger small',
+            onclick: () => removeMember(team, member, showMsg),
+          }, member.id === state.auth.me.id ? 'Leave' : 'Remove')
+        : null,
+    )));
+
+    return el('div', { class: 'team-card' },
+      el('div', { class: 'head' },
+        el('h3', {}, team.name),
+        el('span', { class: 'muted', style: 'font-size:13px' },
+          `${team.members.length} member${team.members.length === 1 ? '' : 's'}`)),
+      members, addForm, msg);
+  }
+
+  async function removeMember(team, member, showMsg) {
+    showMsg('');
+    setMsg('teams-msg', '');
+    try {
+      await api('DELETE', `/teams/${team.id}/members/${member.id}`);
+      const left = member.id === state.auth.me.id;
+      await loadTeams();
+      // Leaving a team changes which notes are visible, so refresh the list too.
+      if (left) await loadNotes();
+      renderTeamCards();
+      setMsg('teams-msg', left ? `You left ${team.name}.` : `Removed ${member.email} from ${team.name}.`, 'ok');
+    } catch (err) {
+      if (err.status !== 401) showMsg(err.message);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Start-up: resume the session from this tab if there is one
+  // ---------------------------------------------------------------------------------------
+  (async () => {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(AUTH_KEY)); } catch { /* none or unreadable */ }
+    if (!saved) return showAuth('login');
+    // Re-check the stored credentials rather than trusting them (fail closed).
+    try {
+      const res = await fetch('/auth/me', { headers: { Authorization: saved.header }, credentials: 'omit' });
+      if (res.ok) return startApp({ header: saved.header, me: await res.json() });
+    } catch { /* server unreachable: fall through to sign-in */ }
+    signOut('Please sign in.');
+  })();
 </script>
 </body>
 </html>

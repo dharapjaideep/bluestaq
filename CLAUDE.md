@@ -1,7 +1,9 @@
 # CLAUDE.md
 
 ## What this project is
-
+A note-taking service used and shared amongst several small teams. It gives users
+somewhere to capture their notes and work with them, through a REST API and a simple
+browser UI.
 Spring Boot 4.1.1 / Java 21 REST service
 
 ## Engineering Principles

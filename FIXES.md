@@ -135,3 +135,16 @@
 - `.claude/agents/auto-implementer.md` — states the exact `gh pr create --base devel ...` form
   the workflow permits.
 - `README.md` — CI workflows section and required secrets.
+
+## 2026-10-24 — Browser UI for notes and teams
+- `src/main/resources/static/index.html` — extended from sign-in/register into the full UI:
+  sidebar filters (All / Personal / each team), search wired to `?q=`, note list with team
+  badge and updated time, note editor (create/view/edit/delete; team dropdown; always sends the
+  current `teamId` on save; team change and delete disabled for non-owners, server 403 still
+  handled), and a teams panel (create, members, add by email, remove/leave only where allowed).
+  API errors are shown inline; 401 returns to sign-in. Credentials moved from memory to
+  `sessionStorage` (tab-scoped, cleared on sign-out) so a reload keeps the session; stored
+  credentials are re-verified via `/auth/me` on load. Kept as one self-contained file so
+  `SecurityConfig` (protected) needs no new public paths for separate .js/.css files. All
+  API data is rendered with `textContent` (no `innerHTML`), so note/team text can't inject HTML.
+- `README.md` — "Browser UI" section; status updated.

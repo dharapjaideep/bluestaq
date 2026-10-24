@@ -5,8 +5,8 @@ somewhere to capture their notes and work with them, through a REST API and a si
 browser UI.
 
 > **Status:** early development. User registration, sign-in, the notes API (personal
-> and team notes, with search) and team management are in place. Notes and teams in the
-> browser UI are next.
+> and team notes, with search), team management and a browser UI for all of it are in
+> place.
 
 ## Tech stack
 
@@ -22,6 +22,26 @@ browser UI.
 ```
 
 Then open <http://localhost:8080/> to register an account, or sign in with a demo account.
+
+### Browser UI
+
+Open <http://localhost:8080/> and sign in (e.g. `alice@demo.com` / `password123`), or
+register a new account. The UI is a single page, `src/main/resources/static/index.html`
+(plain HTML/CSS/JS, no build step), that only calls the REST API:
+
+- **Notes:** a sidebar filter (All, Personal, or one of your teams), search, and a list
+  showing each note's team (or "Personal") and when it was last updated.
+- **Editor:** create, view, edit and delete notes. "Shared with" picks Personal or one of
+  your teams. If you don't own a note, the team picker is disabled and Delete is hidden.
+  The server enforces the same rules, and the UI shows its 403 if one comes back.
+- **Teams:** "Manage teams" lets you create a team, see its members, add members by email
+  and remove members. Remove/Leave buttons only appear where you're allowed to use them.
+- **Errors** (400, 403, 404, 409) appear as inline messages. A 401 sends you back to the
+  sign-in screen.
+
+Credentials are kept in `sessionStorage` for the current tab only: a page reload keeps you
+signed in, and signing out or closing the tab clears them. Sign in as `bob@demo.com` in
+another browser profile to watch sharing between users.
 
 ### Demo data
 
